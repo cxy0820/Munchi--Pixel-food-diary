@@ -844,7 +844,7 @@ button,
   position: absolute;
   left: 24px;
   right: 24px;
-  top: 22px;
+  top: 34px;
   z-index: 5;
   display: flex;
   align-items: flex-start;
@@ -898,10 +898,10 @@ button,
 
 .daily-poster-hero {
   left: 50%;
-  top: 47.5%;
-  width: 264px;
-  height: 264px;
-  min-height: 264px;
+  top: 44.5%;
+  width: 296px;
+  height: 296px;
+  min-height: 296px;
   translate: -50% -50%;
 }
 
@@ -913,12 +913,12 @@ button,
 
 .daily-poster-side-one {
   left: 9%;
-  top: 29%;
+  top: 25%;
 }
 
 .daily-poster-side-two {
   right: 8%;
-  top: 41%;
+  top: 37%;
 }
 
 .daily-poster-preview .sticker-photo img {
@@ -2872,7 +2872,7 @@ label span {
   .daily-poster-top {
     left: 16px;
     right: 16px;
-    top: 16px;
+    top: 28px;
   }
 
   .daily-poster-top h3 {
@@ -2892,9 +2892,9 @@ label span {
 
   .daily-poster-hero {
     left: 50%;
-    top: 48.5%;
-    width: 33%;
-    height: 33%;
+    top: 45.5%;
+    width: 37%;
+    height: 37%;
     min-height: 0;
   }
 
@@ -2906,12 +2906,12 @@ label span {
 
   .daily-poster-side-one {
     left: 12%;
-    top: 50%;
+    top: 46%;
   }
 
   .daily-poster-side-two {
     right: 11%;
-    top: 49%;
+    top: 45%;
   }
 
   .daily-poster-decor {

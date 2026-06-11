@@ -689,13 +689,13 @@ function DailyPoster({ records, urls }: { records: FoodRecord[]; urls: Record<st
 
     ctx.fillStyle = "#281722";
     ctx.font = `700 30px "Munchi Pixel", "Munchi Round", sans-serif`;
-    ctx.fillText("TODAY'S TASTE NOTE", 64, 82);
+    ctx.fillText("TODAY'S TASTE NOTE", 64, 112);
     ctx.font = `700 82px "Munchi Pixel", "Munchi Round", sans-serif`;
-    ctx.fillText("Little bites,", 64, 160);
-    ctx.fillText("big mood.", 64, 236);
+    ctx.fillText("Little bites,", 64, 190);
+    ctx.fillText("big mood.", 64, 266);
 
     ctx.save();
-    ctx.translate(930, 110);
+    ctx.translate(930, 140);
     ctx.fillStyle = "#281722";
     ctx.beginPath();
     ctx.arc(0, 0, 70, 0, Math.PI * 2);
@@ -711,9 +711,9 @@ function DailyPoster({ records, urls }: { records: FoodRecord[]; urls: Record<st
     await drawPosterSticker(ctx, "/poster-decor/flower.svg", 800, 370, 110, -9, 12);
     await drawPosterSticker(ctx, "/poster-decor/cake.svg", 160, 930, 112, -4, 12);
     await drawPosterSticker(ctx, "/poster-decor/glowing-star.svg", 840, 930, 108, 8, 12);
-    await drawPosterSticker(ctx, urls[hero.stickerImageId], 540, 630, 420, 5);
-    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 170, 595, 190, -10);
-    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 910, 585, 190, 11);
+    await drawPosterSticker(ctx, urls[hero.stickerImageId], 540, 580, 480, 5);
+    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 170, 545, 190, -10);
+    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 910, 535, 190, 11);
     drawPosterLabel(ctx, dailyPosterQuotes[0], 122, 820, "#efcbd8", 7);
     drawPosterLabel(ctx, dailyPosterQuotes[1], 720, 880, "#dcd3f0", -6);
     drawPosterLabel(ctx, dailyPosterQuotes[2], 390, 1000, "#ffe391", 3);
