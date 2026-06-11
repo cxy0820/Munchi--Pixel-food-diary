@@ -707,16 +707,16 @@ function DailyPoster({ records, urls }: { records: FoodRecord[]; urls: Record<st
     ctx.fillText("MUNCHI", 0, 34);
     ctx.restore();
 
-    await drawPosterSticker(ctx, "/poster-decor/bow.svg", 130, 330, 110, 9, 12);
-    await drawPosterSticker(ctx, "/poster-decor/flower.svg", 800, 370, 110, -9, 12);
-    await drawPosterSticker(ctx, "/poster-decor/cake.svg", 160, 930, 112, -4, 12);
-    await drawPosterSticker(ctx, "/poster-decor/glowing-star.svg", 840, 930, 108, 8, 12);
-    await drawPosterSticker(ctx, urls[hero.stickerImageId], 540, 580, 560, 5);
-    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 160, 665, 190, -10);
-    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 920, 640, 190, 11);
-    drawPosterLabel(ctx, dailyPosterQuotes[0], 98, 805, "#efcbd8", 7);
-    drawPosterLabel(ctx, dailyPosterQuotes[1], 720, 880, "#dcd3f0", -6);
-    drawPosterLabel(ctx, dailyPosterQuotes[2], 150, 1070, "#ffe391", 3);
+    await drawPosterSticker(ctx, "/poster-decor/bow.svg", 138, 350, 108, 9, 12);
+    await drawPosterSticker(ctx, "/poster-decor/flower.svg", 875, 440, 108, -9, 12);
+    await drawPosterSticker(ctx, "/poster-decor/cake.svg", 790, 920, 108, -4, 12);
+    await drawPosterSticker(ctx, "/poster-decor/glowing-star.svg", 900, 900, 104, 8, 12);
+    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 260, 485, 250, -9);
+    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 285, 865, 285, 8);
+    await drawPosterSticker(ctx, urls[hero.stickerImageId], 700, 690, 510, 4);
+    drawPosterLabel(ctx, dailyPosterQuotes[0], 592, 420, "#efcbd8", 6);
+    drawPosterLabel(ctx, dailyPosterQuotes[1], 650, 945, "#dcd3f0", -5);
+    drawPosterLabel(ctx, dailyPosterQuotes[2], 170, 1090, "#ffe391", 3);
 
     ctx.save();
     ctx.translate(804, 1124);
@@ -790,9 +790,9 @@ function DailyPoster({ records, urls }: { records: FoodRecord[]; urls: Record<st
                 </div>
                 <div className="daily-poster-date pixel">{dateLabel}<br />Munchi</div>
               </div>
-              <StickerImage className="daily-poster-hero" src={urls[hero.stickerImageId]} label={hero.name} style={{ ...hero.stickerStyle, rotation: 5, scale: 1, shadow: false }} />
-              {second && <StickerImage className="daily-poster-small daily-poster-side-one" src={urls[second.stickerImageId]} label={second.name} style={{ ...second.stickerStyle, rotation: -10, scale: 1, shadow: false }} />}
-              {third && <StickerImage className="daily-poster-small daily-poster-side-two" src={urls[third.stickerImageId]} label={third.name} style={{ ...third.stickerStyle, rotation: 11, scale: 1, shadow: false }} />}
+              <StickerImage className="daily-poster-hero" src={urls[hero.stickerImageId]} label={hero.name} style={{ ...hero.stickerStyle, rotation: 4, scale: 1, shadow: false }} />
+              {second && <StickerImage className="daily-poster-small daily-poster-side-one" src={urls[second.stickerImageId]} label={second.name} style={{ ...second.stickerStyle, rotation: -9, scale: 1, shadow: false }} />}
+              {third && <StickerImage className="daily-poster-small daily-poster-side-two" src={urls[third.stickerImageId]} label={third.name} style={{ ...third.stickerStyle, rotation: 8, scale: 1, shadow: false }} />}
               {posterDecor.map((decor) => <img key={decor.src} className={`daily-poster-decor ${decor.className}`} src={decor.src} alt={decor.alt} />)}
               <span className="daily-poster-quote quote-one pixel">{dailyPosterQuotes[0]}</span>
               <span className="daily-poster-quote quote-two pixel">{dailyPosterQuotes[1]}</span>
