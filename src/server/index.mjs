@@ -1,0 +1,334 @@
+﻿import crypto from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import dotenv from "dotenv";
+import express from "express";
+import multer from "multer";
+
+dotenv.config();
+
+const app = express();
+const port = Number(process.env.PORT || 5173);
+const csrfToken = crypto.randomBytes(32).toString("hex");
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024, files: 1 }
+});
+
+const rateWindowMs = 60_000;
+const rateLimit = 20;
+const hits = new Map();
+
+const isImageBuffer = (buffer) => {
+  if (!buffer || buffer.length < 12) return false;
+  const png = buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47;
+  const jpg = buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  const webp = buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
+  const heic = buffer.toString("ascii", 4, 12).includes("ftyphei") || buffer.toString("ascii", 4, 12).includes("ftypmif");
+  return png || jpg || webp || heic;
+};
+
+const securityHeaders = (_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "SAMEORIGIN");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+  );
+  if (_req.secure) {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+};
+
+const limiter = (req, res, next) => {
+  const key = req.ip || "local";
+  const now = Date.now();
+  const item = hits.get(key);
+  if (!item || now - item.start > rateWindowMs) {
+    hits.set(key, { start: now, count: 1 });
+    next();
+    return;
+  }
+  item.count += 1;
+  if (item.count > rateLimit) {
+    res.status(429).json({ error: "Too many sticker requests. Please wait a minute and try again." });
+    return;
+  }
+  next();
+};
+
+app.disable("x-powered-by");
+app.use(securityHeaders);
+app.use(express.json({ limit: "32kb" }));
+
+app.get("/api/csrf-token", (_req, res) => {
+  res.json({ token: csrfToken });
+});
+
+app.post("/api/remove-background", limiter, upload.single("image_file"), async (req, res) => {
+  if (req.headers["x-csrf-token"] !== csrfToken) {
+    res.status(403).json({ error: "The sticker request could not be verified. Refresh and try again." });
+    return;
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: "Upload a photo before creating a sticker." });
+    return;
+  }
+
+  if (!["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"].includes(req.file.mimetype) || !isImageBuffer(req.file.buffer)) {
+    res.status(400).json({ error: "Upload a PNG, JPG, WebP, or HEIC image." });
+    return;
+  }
+
+  const provider = (process.env.BACKGROUND_PROVIDER || (process.env.REMOVE_BG_API_KEY ? "removebg" : "clipdrop")).toLowerCase();
+  const form = new FormData();
+  form.append("image_file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "photo.jpg");
+
+  if (provider === "removebg") {
+    if (!process.env.REMOVE_BG_API_KEY) {
+      res.status(503).json({ error: "remove.bg is not configured. Add REMOVE_BG_API_KEY to .env and restart the server." });
+      return;
+    }
+
+    form.append("size", "auto");
+
+    try {
+      const response = await fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": process.env.REMOVE_BG_API_KEY },
+        body: form
+      });
+
+      if (!response.ok) {
+        const fallback = {
+          401: "remove.bg rejected the API key. Check REMOVE_BG_API_KEY.",
+          402: "remove.bg has no credits left for this account.",
+          403: "remove.bg says this API key cannot use background removal.",
+          429: "remove.bg is rate limiting requests. Please try again soon."
+        };
+        const text = await response.text().catch(() => "");
+        res.status(response.status).json({ error: fallback[response.status] || text || "remove.bg could not remove the background." });
+        return;
+      }
+
+      const result = Buffer.from(await response.arrayBuffer());
+      res.setHeader("Content-Type", response.headers.get("content-type") || "image/png");
+      res.setHeader("Cache-Control", "no-store");
+      res.send(result);
+    } catch {
+      res.status(502).json({ error: "Could not reach remove.bg. Check your network and try again." });
+    }
+    return;
+  }
+
+  if (provider !== "clipdrop") {
+    res.status(503).json({ error: "Unknown background removal provider. Use BACKGROUND_PROVIDER=removebg or BACKGROUND_PROVIDER=clipdrop." });
+    return;
+  }
+
+  if (!process.env.CLIPDROP_API_KEY) {
+    res.status(503).json({ error: "Clipdrop is not configured. Add CLIPDROP_API_KEY to .env and restart the server." });
+    return;
+  }
+
+  try {
+    const response = await fetch("https://clipdrop-api.co/remove-background/v1", {
+      method: "POST",
+      headers: { "x-api-key": process.env.CLIPDROP_API_KEY },
+      body: form
+    });
+
+    if (!response.ok) {
+      const fallback = {
+        401: "Clipdrop rejected the API key. Check CLIPDROP_API_KEY.",
+        402: "Clipdrop has no credits left for this account.",
+        403: "Clipdrop says this API key cannot use background removal.",
+        429: "Clipdrop is rate limiting requests. Please try again soon."
+      };
+      const text = await response.text().catch(() => "");
+      res.status(response.status).json({ error: fallback[response.status] || text || "Clipdrop could not remove the background." });
+      return;
+    }
+
+    const result = Buffer.from(await response.arrayBuffer());
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(result);
+  } catch {
+    res.status(502).json({ error: "Could not reach Clipdrop. Check your network and try again." });
+  }
+});
+
+app.post("/api/analyze-food", limiter, upload.single("image_file"), async (req, res) => {
+  if (req.headers["x-csrf-token"] !== csrfToken) {
+    res.status(403).json({ error: "The food analysis request could not be verified. Refresh and try again." });
+    return;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    res.status(503).json({ error: "Food recognition is not configured. Add OPENAI_API_KEY to .env and restart the server." });
+    return;
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: "Upload a photo before analyzing food." });
+    return;
+  }
+
+  if (!["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"].includes(req.file.mimetype) || !isImageBuffer(req.file.buffer)) {
+    res.status(400).json({ error: "Upload a PNG, JPG, WebP, or HEIC image." });
+    return;
+  }
+
+  const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: process.env.OPENAI_MODEL || "gpt-5.5",
+        input: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: "Identify the main food or drink in this image for a cozy pixel food diary. Return a short memory-friendly note. Do not give medical, dieting, or nutrition advice."
+              },
+              {
+                type: "input_image",
+                image_url: dataUrl
+              }
+            ]
+          }
+        ],
+        text: {
+          format: {
+            type: "json_schema",
+            name: "food_sticker_analysis",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                name: { type: "string" },
+                category: {
+                  type: "string",
+                  enum: ["Milk tea", "Coffee", "Drink", "Meal", "Dessert", "Snack", "Fruit", "Homemade", "Restaurant", "Other"]
+                },
+                confidence: { type: "string", enum: ["low", "medium", "high"] },
+                note: { type: "string" }
+              },
+              required: ["name", "category", "confidence", "note"]
+            }
+          }
+        }
+      })
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const fallback = {
+        401: "OpenAI rejected the API key. Check OPENAI_API_KEY.",
+        429: "OpenAI is rate limiting requests. Please try again soon."
+      };
+      res.status(response.status).json({ error: fallback[response.status] || body.error?.message || "Food recognition failed." });
+      return;
+    }
+
+    const text = body.output_text || body.output?.flatMap((item) => item.content || []).find((item) => item.type === "output_text")?.text;
+    if (!text) {
+      res.status(502).json({ error: "Food recognition returned no result." });
+      return;
+    }
+    res.json(JSON.parse(text));
+  } catch {
+    res.status(502).json({ error: "Could not analyze the food photo. Check your network and try again." });
+  }
+});
+
+app.post("/api/pixel-sticker", limiter, upload.single("image_file"), async (req, res) => {
+  if (req.headers["x-csrf-token"] !== csrfToken) {
+    res.status(403).json({ error: "The pixel sticker request could not be verified. Refresh and try again." });
+    return;
+  }
+
+  if (!process.env.OPENAI_API_KEY) {
+    res.status(503).json({ error: "Pixel sticker generation is not configured. Add OPENAI_API_KEY to .env and restart the server." });
+    return;
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: "Create a cutout before generating a pixel sticker." });
+    return;
+  }
+
+  if (!["image/png", "image/jpeg", "image/webp"].includes(req.file.mimetype) || !isImageBuffer(req.file.buffer)) {
+    res.status(400).json({ error: "Upload a PNG, JPG, or WebP cutout." });
+    return;
+  }
+
+  const form = new FormData();
+  form.append("model", process.env.OPENAI_IMAGE_MODEL || "gpt-image-1");
+  form.append("image", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "cutout.png");
+  form.append("prompt", "Create warm pixel art for a cozy food diary app. Turn the input food or drink cutout into a single centered sticker-like game item icon with a transparent background. Preserve the main food identity and readable silhouette. No text, no UI, no logo, no hands, no extra objects, no plate unless the plate is part of the input.");
+  form.append("size", "1024x1024");
+  form.append("background", "transparent");
+  form.append("output_format", "png");
+
+  try {
+    const response = await fetch("https://api.openai.com/v1/images/edits", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`
+      },
+      body: form
+    });
+
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const fallback = {
+        400: "OpenAI could not create a pixel sticker from this image. Try another photo.",
+        401: "OpenAI rejected the API key. Check OPENAI_API_KEY.",
+        429: "OpenAI is rate limiting pixel sticker requests. Please try again soon."
+      };
+      res.status(response.status).json({ error: fallback[response.status] || body.error?.message || "Pixel sticker generation failed." });
+      return;
+    }
+
+    const b64 = body.data?.[0]?.b64_json;
+    if (!b64) {
+      res.status(502).json({ error: "Pixel sticker generation returned no image." });
+      return;
+    }
+
+    const result = Buffer.from(b64, "base64");
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(result);
+  } catch {
+    res.status(502).json({ error: "Could not create the pixel sticker. Check your network and try again." });
+  }
+});
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const dist = path.resolve(__dirname, "../../dist");
+app.use(express.static(dist, { index: false }));
+app.use((_req, res, next) => {
+  res.sendFile(path.join(dist, "index.html"), (error) => {
+    if (error) next();
+  });
+});
+
+app.listen(port, "0.0.0.0", () => {
+  console.log(`Munchi running at http://127.0.0.1:${port}`);
+  console.log("For phone testing, open http://YOUR-COMPUTER-IP:" + port);
+});

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Munchi">
+  <rect width="128" height="128" rx="30" fill="#fff7df"/>
+  <path d="M31 39c7-12 25-17 42-12 18 5 30 19 28 35-3 24-27 43-51 38-23-5-31-40-19-61Z" fill="#ffffff" stroke="#b96f82" stroke-width="9"/>
+  <path d="M45 57c5-10 22-12 31-2 9 11 1 28-15 30-16 2-23-15-16-28Z" fill="#e8b8c3"/>
+  <circle cx="77" cy="47" r="8" fill="#94ad75"/>
+  <path d="M43 91c19 9 39 7 55-9" fill="none" stroke="#5b3442" stroke-width="7" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,29 @@
+{
+  "name": "munchi",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && npm run dev:server",
+    "dev:server": "node src/server/index.mjs",
+    "build": "tsc --noEmit && vite build --configLoader native"
+  },
+  "dependencies": {
+    "@vitejs/plugin-react": "^5.1.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-router-dom": "^7.9.6",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2"
+  }
+}

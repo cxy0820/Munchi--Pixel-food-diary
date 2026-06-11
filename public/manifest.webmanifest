@@ -1,0 +1,16 @@
+﻿{
+  "name": "Munchi",
+  "short_name": "Munchi",
+  "start_url": "/app/today",
+  "display": "standalone",
+  "background_color": "#fff7df",
+  "theme_color": "#b96f82",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
