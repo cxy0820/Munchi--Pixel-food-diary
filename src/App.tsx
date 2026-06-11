@@ -711,9 +711,9 @@ function DailyPoster({ records, urls }: { records: FoodRecord[]; urls: Record<st
     await drawPosterSticker(ctx, "/poster-decor/flower.svg", 800, 370, 110, -9, 12);
     await drawPosterSticker(ctx, "/poster-decor/cake.svg", 160, 930, 112, -4, 12);
     await drawPosterSticker(ctx, "/poster-decor/glowing-star.svg", 840, 930, 108, 8, 12);
-    await drawPosterSticker(ctx, urls[hero.stickerImageId], 540, 655, 390, 5);
-    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 170, 620, 190, -10);
-    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 910, 610, 190, 11);
+    await drawPosterSticker(ctx, urls[hero.stickerImageId], 540, 630, 420, 5);
+    if (second) await drawPosterSticker(ctx, urls[second.stickerImageId], 170, 595, 190, -10);
+    if (third) await drawPosterSticker(ctx, urls[third.stickerImageId], 910, 585, 190, 11);
     drawPosterLabel(ctx, dailyPosterQuotes[0], 122, 820, "#efcbd8", 7);
     drawPosterLabel(ctx, dailyPosterQuotes[1], 720, 880, "#dcd3f0", -6);
     drawPosterLabel(ctx, dailyPosterQuotes[2], 390, 1000, "#ffe391", 3);
