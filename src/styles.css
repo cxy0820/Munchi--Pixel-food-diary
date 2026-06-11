@@ -2892,9 +2892,9 @@ label span {
 
   .daily-poster-hero {
     left: 50%;
-    top: 45.5%;
-    width: 37%;
-    height: 37%;
+    top: 45%;
+    width: 46%;
+    height: 46%;
     min-height: 0;
   }
 
@@ -2905,13 +2905,13 @@ label span {
   }
 
   .daily-poster-side-one {
-    left: 12%;
-    top: 46%;
+    left: 8%;
+    top: 48%;
   }
 
   .daily-poster-side-two {
-    right: 11%;
-    top: 45%;
+    right: 8%;
+    top: 46%;
   }
 
   .daily-poster-decor {
@@ -2949,8 +2949,8 @@ label span {
   }
 
   .quote-one {
-    left: 8%;
-    top: 66%;
+    left: 7%;
+    top: 61%;
   }
 
   .quote-two {
@@ -2959,8 +2959,8 @@ label span {
   }
 
   .quote-three {
-    left: 31%;
-    bottom: 23%;
+    left: 10%;
+    bottom: 14%;
   }
 
   .daily-poster-brand {
