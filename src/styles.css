@@ -2838,12 +2838,13 @@ label span {
 
   .daily-poster-modal-backdrop {
     align-items: start;
-    padding: 14px;
+    padding: 8px;
   }
 
   .daily-poster-modal {
     width: 100%;
-    max-height: calc(100dvh - 28px);
+    max-height: calc(100dvh - 16px);
+    gap: 8px;
   }
 
   .daily-poster-modal-actions {
@@ -2863,7 +2864,7 @@ label span {
   }
 
   .daily-poster-preview {
-    width: min(100%, 390px);
+    width: min(calc(100vw - 16px), calc((100dvh - 78px) * .8));
     border-radius: 16px;
   }
 
@@ -2889,15 +2890,27 @@ label span {
   }
 
   .daily-poster-hero {
-    width: 208px;
-    height: 208px;
-    min-height: 208px;
+    left: 50%;
+    top: 53%;
+    width: 34%;
+    height: 34%;
+    min-height: 0;
   }
 
   .daily-poster-small {
-    width: 86px;
-    height: 86px;
-    min-height: 86px;
+    width: 20%;
+    height: 20%;
+    min-height: 0;
+  }
+
+  .daily-poster-side-one {
+    left: 8%;
+    top: 52%;
+  }
+
+  .daily-poster-side-two {
+    right: 7%;
+    top: 51%;
   }
 
   .daily-poster-decor {
@@ -2912,6 +2925,21 @@ label span {
     min-height: 28px;
     padding: 5px 8px;
     font-size: 11px;
+  }
+
+  .quote-one {
+    left: 8%;
+    top: 66%;
+  }
+
+  .quote-two {
+    right: 8%;
+    top: 69%;
+  }
+
+  .quote-three {
+    left: 31%;
+    bottom: 23%;
   }
 
   .daily-poster-brand {
