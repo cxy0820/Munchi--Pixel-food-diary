@@ -1,5 +1,5 @@
 ﻿import { ChangeEvent, PointerEvent, useEffect, useMemo, useRef, useState } from "react";
-import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   defaultSettings,
   exportData,
@@ -77,6 +77,7 @@ type Draft = {
   pixelBlob?: Blob;
   stickerBlob?: Blob;
   prepError?: string;
+  pixelError?: string;
   analysis?: FoodAnalysis;
   style: StickerStyle;
 };
@@ -87,6 +88,8 @@ type FoodAnalysis = {
   confidence: "low" | "medium" | "high";
   note: string;
 };
+
+type PixelJobStatus = "idle" | "generating" | "ready" | "error";
 
 const initialDraft: Draft = {
   source: "upload",
@@ -492,7 +495,17 @@ const EmptyState = ({ title, body, action }: { title: string; body: string; acti
   </section>
 );
 
-const Shell = ({ children }: { children: React.ReactNode }) => (
+const Shell = ({
+  children,
+  addTarget = "/app/add",
+  stickerReady = false,
+  onOpenAdd
+}: {
+  children: React.ReactNode;
+  addTarget?: string;
+  stickerReady?: boolean;
+  onOpenAdd?: () => void;
+}) => (
   <div className="app-shell">
     <aside className="sidebar">
       <Link className="brand" to="/">
@@ -512,7 +525,10 @@ const Shell = ({ children }: { children: React.ReactNode }) => (
     <nav className="bottom-nav" aria-label="Primary">
       <NavLink to="/app/today">Today</NavLink>
       <NavLink to="/app/calendar">Calendar</NavLink>
-      <NavLink className="add-tab" to="/app/add">+</NavLink>
+      <NavLink className={`add-tab ${stickerReady ? "has-sticker-ready" : ""}`} to={addTarget} onClick={onOpenAdd} aria-label={stickerReady ? "Generated sticker ready" : "Add a pixel bite"}>
+        +
+        {stickerReady && <span className="add-ready-badge" aria-hidden="true">✓</span>}
+      </NavLink>
       <NavLink to="/app/collage">Collage</NavLink>
       <NavLink to="/app/collection">Dex</NavLink>
     </nav>
@@ -899,7 +915,7 @@ function AddCapture({ draft, setDraft, toast }: { draft: Draft; setDraft: React.
       }
       const cutoutBlob = cutoutResult.value;
       const analysis = analysisResult.status === "fulfilled" ? analysisResult.value : undefined;
-      setDraft((current) => current.file === file ? { ...current, cutoutBlob, analysis, prepError: undefined } : current);
+      setDraft((current) => current.file === file ? { ...current, cutoutBlob, analysis, prepError: undefined, pixelError: undefined } : current);
       if (analysisResult.status === "rejected") toast("Cutout ready. Food naming needs setup.");
       else toast("Cutout ready for pixel art.");
     } catch (caught) {
@@ -931,12 +947,20 @@ function AddCapture({ draft, setDraft, toast }: { draft: Draft; setDraft: React.
   );
 }
 
-function StickerPreview({ draft, setDraft }: { draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>> }) {
+function StickerPreview({
+  draft,
+  pixelJobStatus,
+  retryPixelSticker
+}: {
+  draft: Draft;
+  pixelJobStatus: PixelJobStatus;
+  retryPixelSticker: () => void;
+}) {
   const navigate = useNavigate();
   const [originalUrl, setOriginalUrl] = useState("");
   const [stickerUrl, setStickerUrl] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
+  const creating = pixelJobStatus === "generating";
+  const error = draft.pixelError || "";
 
   useEffect(() => {
     if (!draft.originalBlob) return;
@@ -946,26 +970,6 @@ function StickerPreview({ draft, setDraft }: { draft: Draft; setDraft: React.Dis
       URL.revokeObjectURL(original);
     };
   }, [draft.originalBlob]);
-
-  const generatePixelSticker = async () => {
-    if (!draft.cutoutBlob || creating) return;
-    setCreating(true);
-    setError("");
-    try {
-      const pixelBlob = await createPixelSticker(draft.cutoutBlob);
-      const stickerBlob = await makeStickerBlob(pixelBlob, draft.style.border);
-      setDraft((current) => current.cutoutBlob === draft.cutoutBlob ? { ...current, pixelBlob, stickerBlob } : current);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Pixel sticker generation failed.");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!draft.cutoutBlob || draft.pixelBlob || draft.stickerBlob) return;
-    generatePixelSticker();
-  }, [draft.cutoutBlob, draft.pixelBlob, draft.stickerBlob]);
 
   useEffect(() => {
     const source = draft.stickerBlob || draft.pixelBlob;
@@ -984,7 +988,7 @@ function StickerPreview({ draft, setDraft }: { draft: Draft; setDraft: React.Dis
 
   return (
     <div className="screen">
-      <Header eyebrow="Step 2 / Pixel Forge" title="Create pixel art" action={error && draft.cutoutBlob ? <button className="icon-btn" onClick={generatePixelSticker}>Retry</button> : undefined} />
+      <Header eyebrow="Step 2 / Pixel Forge" title="Create pixel art" action={error && draft.cutoutBlob ? <button className="icon-btn" onClick={retryPixelSticker}>Retry</button> : undefined} />
       <section className="pixel-forge-layout">
         <aside className="forge-side">
           <div className="photo-tile forge-source"><span>Original</span>{originalUrl && <img src={originalUrl} alt="Original upload" />}</div>
@@ -1007,7 +1011,7 @@ function StickerPreview({ draft, setDraft }: { draft: Draft; setDraft: React.Dis
                 {Array.from({ length: 16 }).map((_, index) => <i key={index} />)}
               </div>
               <strong>{draft.prepError ? "Cutout needs attention" : !draft.cutoutBlob ? "Preparing your food cutout..." : creating ? "Creating your pixel sticker..." : "Pixel art will appear here"}</strong>
-              <p>{draft.prepError ? "Try another photo so Munchi can isolate the food cleanly." : !draft.cutoutBlob ? "Munchi is removing the background before pixel art starts." : "Keep this page open while Munchi builds the 16-bit version."}</p>
+              <p>{draft.prepError ? "Try another photo so Munchi can isolate the food cleanly." : !draft.cutoutBlob ? "Munchi is removing the background before pixel art starts." : "You can visit other pages while Munchi builds the 16-bit version."}</p>
             </div>
           )}
         </div>
@@ -1016,7 +1020,7 @@ function StickerPreview({ draft, setDraft }: { draft: Draft; setDraft: React.Dis
         <section className="error-box pixel-error">
           <h2>{draft.prepError ? "Pixel cutout needs attention" : "Pixel magic failed"}</h2>
           <p>{draft.prepError || error}</p>
-          {draft.prepError ? <Link className="secondary-btn" to="/app/add">Try another photo</Link> : <button className="secondary-btn" onClick={generatePixelSticker}>Retry pixel sticker</button>}
+          {draft.prepError ? <Link className="secondary-btn" to="/app/add">Try another photo</Link> : <button className="secondary-btn" onClick={retryPixelSticker}>Retry pixel sticker</button>}
         </section>
       )}
       <button className="primary-btn full forge-continue" disabled={!draft.stickerBlob || creating || !draft.cutoutBlob} onClick={() => navigate("/app/add/details")}>Looks cute, continue</button>
@@ -1858,12 +1862,17 @@ function SettingsView({
 }
 
 export default function App() {
+  const location = useLocation();
   const [records, setRecords] = useState<FoodRecord[]>([]);
   const [assets, setAssets] = useState<StickerAsset[]>([]);
   const [collages, setCollages] = useState<Collage[]>([]);
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [draft, setDraft] = useState<Draft>(initialDraft);
+  const [pixelJobStatus, setPixelJobStatus] = useState<PixelJobStatus>("idle");
+  const [pixelRetryNonce, setPixelRetryNonce] = useState(0);
+  const [stickerReadySeen, setStickerReadySeen] = useState(false);
   const [toast, setToast] = useState("");
+  const activePixelJob = useRef<Blob | null>(null);
   const urls = useAssetUrls(assets);
 
   const showToast = (message: string) => {
@@ -1887,6 +1896,47 @@ export default function App() {
     reload();
   }, []);
 
+  useEffect(() => {
+    if (!draft.cutoutBlob) {
+      activePixelJob.current = null;
+      setPixelJobStatus("idle");
+      setStickerReadySeen(false);
+      return;
+    }
+    if (draft.stickerBlob) {
+      setPixelJobStatus("ready");
+      return;
+    }
+    if (activePixelJob.current === draft.cutoutBlob) return;
+
+    const cutoutBlob = draft.cutoutBlob;
+    const border = draft.style.border;
+    activePixelJob.current = cutoutBlob;
+    setPixelJobStatus("generating");
+    setStickerReadySeen(false);
+    setDraft((current) => current.cutoutBlob === cutoutBlob ? { ...current, pixelError: undefined } : current);
+
+    (async () => {
+      try {
+        const pixelBlob = await createPixelSticker(cutoutBlob);
+        const stickerBlob = await makeStickerBlob(pixelBlob, border);
+        if (activePixelJob.current === cutoutBlob) activePixelJob.current = null;
+        setDraft((current) => current.cutoutBlob === cutoutBlob ? { ...current, pixelBlob, stickerBlob, pixelError: undefined } : current);
+        setPixelJobStatus("ready");
+        showToast("Pixel sticker ready.");
+      } catch (caught) {
+        if (activePixelJob.current === cutoutBlob) activePixelJob.current = null;
+        const message = caught instanceof Error ? caught.message : "Pixel sticker generation failed.";
+        setDraft((current) => current.cutoutBlob === cutoutBlob ? { ...current, pixelError: message } : current);
+        setPixelJobStatus("error");
+      }
+    })();
+  }, [draft.cutoutBlob, draft.stickerBlob, draft.style.border, pixelRetryNonce]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/app/add/details")) setStickerReadySeen(true);
+  }, [location.pathname]);
+
   const saveRecord = async (asset: StickerAsset, record: FoodRecord) => {
     await putItem("assets", asset);
     await putItem("records", record);
@@ -1902,24 +1952,37 @@ export default function App() {
     showToast("Collage saved.");
   };
 
+  const retryPixelSticker = () => {
+    if (!draft.cutoutBlob) return;
+    activePixelJob.current = null;
+    setPixelRetryNonce((current) => current + 1);
+  };
+
   const routeBundle = useMemo(() => ({ records, assets, urls, settings, collages }), [records, assets, urls, settings, collages]);
+  const addTarget = draft.stickerBlob ? "/app/add/details" : draft.originalBlob ? "/app/add/preview" : "/app/add";
+  const showStickerReadyBadge = pixelJobStatus === "ready" && Boolean(draft.stickerBlob) && !stickerReadySeen && !location.pathname.startsWith("/app/add");
+  const shell = (children: React.ReactNode) => (
+    <Shell addTarget={addTarget} stickerReady={showStickerReadyBadge} onOpenAdd={() => setStickerReadySeen(true)}>
+      {children}
+    </Shell>
+  );
 
   return (
     <>
       <Routes>
         <Route path="/" element={<Landing />} />
-        <Route path="/app" element={<Shell><Navigate to="/app/today" replace /></Shell>} />
-        <Route path="/app/today" element={<Shell><Today records={routeBundle.records} urls={routeBundle.urls} collages={routeBundle.collages} /></Shell>} />
-        <Route path="/app/add" element={<Shell><AddCapture draft={draft} setDraft={setDraft} toast={showToast} /></Shell>} />
-        <Route path="/app/add/preview" element={<Shell><StickerPreview draft={draft} setDraft={setDraft} /></Shell>} />
-        <Route path="/app/add/details" element={<Shell><RecordDetails draft={draft} settings={settings} onSave={saveRecord} /></Shell>} />
-        <Route path="/app/add/saved" element={<Shell><Saved /></Shell>} />
-        <Route path="/app/calendar" element={<Shell><CalendarView records={records} urls={urls} /></Shell>} />
-        <Route path="/app/calendar/:date" element={<Shell><DayDetail records={records} urls={urls} /></Shell>} />
-        <Route path="/app/collage" element={<Shell><CollageView records={records} urls={urls} collages={collages} saveCollage={saveCollage} /></Shell>} />
-        <Route path="/app/collection" element={<Shell><Collection records={records} urls={urls} /></Shell>} />
+        <Route path="/app" element={shell(<Navigate to="/app/today" replace />)} />
+        <Route path="/app/today" element={shell(<Today records={routeBundle.records} urls={routeBundle.urls} collages={routeBundle.collages} />)} />
+        <Route path="/app/add" element={shell(<AddCapture draft={draft} setDraft={setDraft} toast={showToast} />)} />
+        <Route path="/app/add/preview" element={shell(<StickerPreview draft={draft} pixelJobStatus={pixelJobStatus} retryPixelSticker={retryPixelSticker} />)} />
+        <Route path="/app/add/details" element={shell(<RecordDetails draft={draft} settings={settings} onSave={saveRecord} />)} />
+        <Route path="/app/add/saved" element={shell(<Saved />)} />
+        <Route path="/app/calendar" element={shell(<CalendarView records={records} urls={urls} />)} />
+        <Route path="/app/calendar/:date" element={shell(<DayDetail records={records} urls={urls} />)} />
+        <Route path="/app/collage" element={shell(<CollageView records={records} urls={urls} collages={collages} saveCollage={saveCollage} />)} />
+        <Route path="/app/collection" element={shell(<Collection records={records} urls={urls} />)} />
         <Route path="/app/stay-fit" element={<Navigate to="/app/collection" replace />} />
-        <Route path="/app/settings" element={<Shell><SettingsView settings={settings} setSettings={setSettings} reload={reload} toast={showToast} /></Shell>} />
+        <Route path="/app/settings" element={shell(<SettingsView settings={settings} setSettings={setSettings} reload={reload} toast={showToast} />)} />
         <Route path="/today" element={<Navigate to="/app/today" replace />} />
         <Route path="/add/*" element={<Navigate to="/app/add" replace />} />
         <Route path="/calendar" element={<Navigate to="/app/calendar" replace />} />
