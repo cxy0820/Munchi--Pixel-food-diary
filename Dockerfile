@@ -36,4 +36,4 @@ USER node
 
 EXPOSE 10000
 
-CMD ["npm", "start"]
+CMD ["node", "src/server/index.mjs"]

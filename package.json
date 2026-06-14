@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "npm run build && npm run dev:server",
     "dev:server": "node src/server/index.mjs",
-    "build": "tsc --noEmit && vite build --configLoader native"
+    "build": "tsc --noEmit && vite build --configLoader native",
+    "start": "node src/server/index.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.1.0",
