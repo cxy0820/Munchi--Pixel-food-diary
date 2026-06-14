@@ -12,7 +12,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
-RUN npm ci
+RUN npm install
 
 COPY requirements-rembg.txt ./
 RUN python3 -m venv .venv \
