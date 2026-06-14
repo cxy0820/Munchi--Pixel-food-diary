@@ -78,6 +78,14 @@
   font-display: swap;
 }
 
+@font-face {
+  font-family: "Munchi ZCOOL KuaiLe";
+  src: url("/fonts/zcool-kuaile-400.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   --bg: #fff7df;
   --bg-soft: #fffaf0;
@@ -97,9 +105,9 @@
   --border: #eadbc8;
   --border-strong: #d9bdc5;
   --shadow: 0 4px 0 rgba(76, 52, 64, .14);
-  --font-body: "Munchi Round", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --font-display: "Munchi Pixel", "Munchi Round", ui-sans-serif, system-ui, sans-serif;
-  --font-note: "Munchi Pixel", "Munchi Round", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Munchi Round", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Munchi Pixel", "Munchi Round", ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-note: "Munchi Pixel", "Munchi Round", ui-sans-serif, system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
   --pixel-font: var(--font-display);
   --pixel-border: #c9aab5;
   --pixel-ink: #3c2733;
@@ -117,6 +125,17 @@
   font-family: var(--font-body);
   color: var(--ink);
   background: var(--bg);
+}
+
+html[lang="zh-CN"] {
+  --font-zh-title: "Munchi ZCOOL KuaiLe", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-zh-ui: "Munchi ZCOOL KuaiLe", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-zh-body: "Munchi ZCOOL KuaiLe", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-body: var(--font-zh-body);
+  --font-display: var(--font-zh-title);
+  --font-note: var(--font-zh-ui);
+  --pixel-font: var(--font-zh-ui);
+  font-synthesis-weight: auto;
 }
 
 *,
@@ -142,6 +161,14 @@ body {
   width: min(100%, 1240px);
   margin: 0 auto;
   padding: 28px;
+  position: relative;
+}
+
+.landing-language {
+  position: absolute;
+  top: 22px;
+  right: 28px;
+  z-index: 4;
 }
 
 .landing-hero {
@@ -271,6 +298,40 @@ body {
   color: var(--accent-strong);
 }
 
+.language-toggle {
+  display: inline-grid;
+  grid-auto-flow: column;
+  gap: 4px;
+  align-items: center;
+  padding: 4px;
+  border: var(--pixel-line) solid var(--pixel-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, .8);
+  box-shadow: var(--pixel-shadow-soft);
+}
+
+.language-toggle button {
+  min-width: 72px;
+  min-height: 36px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--pixel-font);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.language-toggle.compact button {
+  min-width: 42px;
+}
+
+.language-toggle button.is-active {
+  background: var(--accent);
+  color: white;
+  box-shadow: inset 0 -2px 0 rgba(76, 52, 64, .16);
+}
+
 .landing-strip {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -365,6 +426,66 @@ button,
 .chip,
 .rating {
   font-family: var(--pixel-font);
+}
+
+html[lang="zh-CN"] h1,
+html[lang="zh-CN"] h2,
+html[lang="zh-CN"] h3,
+html[lang="zh-CN"] .landing-copy h1,
+html[lang="zh-CN"] .screen-header h1,
+html[lang="zh-CN"] .empty-state h2,
+html[lang="zh-CN"] .section-heading h2 {
+  font-family: var(--font-zh-title);
+  font-weight: 700;
+}
+
+html[lang="zh-CN"] .landing-copy h1,
+html[lang="zh-CN"] .screen-header h1,
+html[lang="zh-CN"] .empty-state h2,
+html[lang="zh-CN"] .section-heading h2,
+html[lang="zh-CN"] .collage-text-item.title,
+html[lang="zh-CN"] .text-preset-grid .collage-text-item.title {
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  font-kerning: normal;
+  image-rendering: auto;
+  text-rendering: optimizeLegibility;
+  letter-spacing: 0;
+  paint-order: fill;
+  text-shadow: none;
+  -webkit-text-stroke: 0;
+}
+
+html[lang="zh-CN"] .brand,
+html[lang="zh-CN"] .desktop-nav a,
+html[lang="zh-CN"] .bottom-nav a,
+html[lang="zh-CN"] button,
+html[lang="zh-CN"] .primary-btn,
+html[lang="zh-CN"] .secondary-btn,
+html[lang="zh-CN"] .icon-btn,
+html[lang="zh-CN"] .chip,
+html[lang="zh-CN"] .rating,
+html[lang="zh-CN"] .language-toggle button {
+  font-family: var(--font-zh-ui);
+  font-weight: 900;
+}
+
+html[lang="zh-CN"] p,
+html[lang="zh-CN"] label,
+html[lang="zh-CN"] input,
+html[lang="zh-CN"] textarea,
+html[lang="zh-CN"] select,
+html[lang="zh-CN"] .status,
+html[lang="zh-CN"] .setting-field span,
+html[lang="zh-CN"] .journal-preview {
+  font-family: var(--font-zh-body);
+}
+
+html[lang="zh-CN"] .landing-copy p,
+html[lang="zh-CN"] .screen p,
+html[lang="zh-CN"] .tool-panel label,
+html[lang="zh-CN"] .tool-panel .status {
+  line-height: 1.68;
 }
 
 .app-shell {
@@ -2509,6 +2630,238 @@ label span {
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
 }
 
+.setting-field {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.setting-field p {
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.setting-field span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.language-setting {
+  padding: 12px;
+  border: var(--pixel-line) solid var(--pixel-border);
+  border-radius: var(--radius-md);
+  background: rgba(255, 250, 240, .76);
+}
+
+.zh-font-preview-shell {
+  --font-body: "Munchi ZCOOL KuaiLe", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: "Munchi ZCOOL KuaiLe", "Munchi Pixel", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-note: "Munchi ZCOOL KuaiLe", "Munchi Pixel", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --pixel-font: "Munchi ZCOOL KuaiLe", "Munchi Pixel", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-family: var(--font-body);
+}
+
+.zh-font-preview-shell h1,
+.zh-font-preview-shell h2,
+.zh-font-preview-shell h3,
+.zh-font-preview-shell p,
+.zh-font-preview-shell label,
+.zh-font-preview-shell input,
+.zh-font-preview-shell textarea,
+.zh-font-preview-shell button,
+.zh-font-preview-shell a,
+.zh-font-preview-shell strong,
+.zh-font-preview-shell span {
+  font-family: "Munchi ZCOOL KuaiLe", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 400;
+}
+
+html[lang="zh-CN"] .zh-font-preview-shell,
+html[lang="zh-CN"] .zh-font-preview-shell h1,
+html[lang="zh-CN"] .zh-font-preview-shell h2,
+html[lang="zh-CN"] .zh-font-preview-shell h3,
+html[lang="zh-CN"] .zh-font-preview-shell p,
+html[lang="zh-CN"] .zh-font-preview-shell label,
+html[lang="zh-CN"] .zh-font-preview-shell input,
+html[lang="zh-CN"] .zh-font-preview-shell textarea,
+html[lang="zh-CN"] .zh-font-preview-shell button,
+html[lang="zh-CN"] .zh-font-preview-shell a,
+html[lang="zh-CN"] .zh-font-preview-shell strong,
+html[lang="zh-CN"] .zh-font-preview-shell span,
+html[lang="zh-CN"] .zh-font-preview-shell .brand,
+html[lang="zh-CN"] .zh-font-preview-shell .desktop-nav a,
+html[lang="zh-CN"] .zh-font-preview-shell .bottom-nav a,
+html[lang="zh-CN"] .zh-font-preview-shell .primary-btn,
+html[lang="zh-CN"] .zh-font-preview-shell .secondary-btn,
+html[lang="zh-CN"] .zh-font-preview-shell .chip,
+html[lang="zh-CN"] .zh-font-preview-shell .kicker,
+html[lang="zh-CN"] .zh-font-preview-shell .meta,
+html[lang="zh-CN"] .zh-font-preview-shell .count-pill {
+  font-family: "Munchi ZCOOL KuaiLe", "Munchi Round", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-weight: 400;
+}
+
+html[lang="zh-CN"] .zh-font-preview-shell h1,
+html[lang="zh-CN"] .zh-font-preview-shell h2,
+html[lang="zh-CN"] .zh-font-preview-shell h3,
+html[lang="zh-CN"] .zh-font-preview-shell .section-heading h2,
+html[lang="zh-CN"] .zh-font-preview-shell .zh-font-preview-hero h1,
+html[lang="zh-CN"] .zh-font-preview-shell .zh-preview-card h2,
+html[lang="zh-CN"] .zh-font-preview-shell .zh-preview-board h2 {
+  color: var(--ink);
+  letter-spacing: 0;
+  text-shadow: none;
+  -webkit-font-smoothing: auto;
+  font-kerning: auto;
+  image-rendering: auto;
+  text-rendering: auto;
+  font-weight: 700;
+}
+
+.zh-font-preview-page {
+  gap: 16px;
+}
+
+.zh-font-preview-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  gap: 18px;
+  align-items: stretch;
+  padding: 18px;
+  border: var(--pixel-line) solid var(--pixel-border);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, .78);
+  box-shadow: var(--shadow);
+}
+
+.zh-font-preview-hero > div:first-child {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+
+.zh-font-preview-hero h1 {
+  max-width: 680px;
+  color: var(--ink);
+  font-size: 38px;
+  line-height: 1.16;
+  letter-spacing: 0;
+}
+
+.zh-font-preview-hero p:not(.kicker),
+.zh-preview-board > p,
+.zh-font-preview-compare p {
+  color: var(--ink-2);
+  font-size: 16px;
+  line-height: 1.68;
+}
+
+.zh-font-preview-badge {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  min-height: 148px;
+  border: 1px solid var(--pixel-border);
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(90deg, rgba(217, 189, 197, .22) 1px, transparent 1px),
+    linear-gradient(rgba(217, 189, 197, .22) 1px, transparent 1px),
+    var(--bg-soft);
+  background-size: 16px 16px;
+  text-align: center;
+}
+
+.zh-font-preview-badge span {
+  color: var(--accent-strong);
+  font-size: 20px;
+}
+
+.zh-font-preview-badge strong {
+  max-width: 8em;
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1.14;
+}
+
+.zh-preview-board {
+  display: grid;
+  gap: 18px;
+}
+
+.zh-preview-sticker-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: end;
+  min-height: 150px;
+}
+
+.zh-preview-sticker-row img {
+  width: min(100%, 132px);
+  justify-self: center;
+  image-rendering: pixelated;
+  filter: drop-shadow(0 8px 0 rgba(76, 52, 64, .1));
+}
+
+.zh-preview-sticker-row img:nth-child(1) {
+  transform: rotate(-5deg);
+}
+
+.zh-preview-sticker-row img:nth-child(2) {
+  transform: rotate(4deg);
+}
+
+.zh-preview-sticker-row img:nth-child(3) {
+  transform: rotate(-2deg);
+}
+
+.zh-preview-card {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.zh-preview-card h2,
+.zh-font-preview-compare h2,
+.zh-preview-board h2 {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1.22;
+}
+
+.zh-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.zh-font-preview-compare {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.zh-font-preview-compare > div {
+  display: grid;
+  gap: 8px;
+}
+
+.zh-font-preview-compare .english-sample,
+.zh-font-preview-compare h2 {
+  font-family: "Munchi Round", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 700;
+}
+
+html[lang="zh-CN"] .zh-font-preview-shell .zh-font-preview-compare .english-sample,
+html[lang="zh-CN"] .zh-font-preview-shell .zh-font-preview-compare h2 {
+  font-family: "Munchi Round", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-weight: 700;
+}
+
 .toast {
   position: fixed;
   left: 50%;
@@ -2593,6 +2946,43 @@ label span {
 
   .landing-strip {
     grid-template-columns: 1fr;
+  }
+
+  .zh-font-preview-hero {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .zh-font-preview-hero h1 {
+    font-size: 32px;
+    line-height: 1.18;
+  }
+
+  .zh-font-preview-badge {
+    min-height: 172px;
+  }
+
+  .zh-preview-sticker-row {
+    min-height: 126px;
+    gap: 6px;
+  }
+
+  .zh-preview-sticker-row img {
+    width: min(100%, 96px);
+  }
+
+  .zh-font-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .zh-font-preview-compare {
+    align-items: start;
+  }
+
+  .zh-font-preview-compare .secondary-btn {
+    align-self: center;
+    padding-inline: 12px;
   }
 
   .app-shell {

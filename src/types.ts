@@ -1,5 +1,6 @@
 export type Rating = "Amazing" | "Good" | "Okay" | "Bad";
 export type Source = "camera" | "upload";
+export type Language = "en" | "zh";
 
 export type StickerStyle = {
   border: number;
@@ -97,6 +98,7 @@ export type Collage = {
 };
 
 export type Settings = {
+  language: Language;
   theme: string;
   defaultRecordTypes: string[];
   stickerBorderStyle: number;

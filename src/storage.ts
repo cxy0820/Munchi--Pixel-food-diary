@@ -6,6 +6,7 @@ const SETTINGS_KEY = "siplog-settings";
 const STORAGE_TIMEOnT_MS = 8000;
 
 export const defaultSettings: Settings = {
+  language: "en",
   theme: "Dusty Rose",
   defaultRecordTypes: ["Drinks", "Meals", "Desserts", "Snacks"],
   stickerBorderStyle: 12,
