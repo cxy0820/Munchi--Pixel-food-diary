@@ -582,9 +582,14 @@ html[lang="zh-CN"] .tool-panel .status {
 }
 
 .content-frame {
+  position: relative;
   width: min(100%, 1040px);
   margin: 0 auto;
   padding: 28px 28px 96px;
+}
+
+.mobile-settings-link {
+  display: none;
 }
 
 .screen {
@@ -3023,6 +3028,40 @@ html[lang="zh-CN"] .zh-font-preview-shell .zh-font-preview-compare h2 {
   .content-frame {
     max-width: 430px;
     padding: 14px 16px 90px;
+  }
+
+  .mobile-settings-link {
+    position: absolute;
+    right: 16px;
+    top: 22px;
+    z-index: 5;
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border: 1px solid var(--pixel-border);
+    border-radius: var(--radius-md);
+    background: rgba(255, 255, 255, .86);
+    color: var(--accent-strong);
+    box-shadow: var(--pixel-shadow-soft);
+  }
+
+  .mobile-settings-link svg {
+    width: 21px;
+    height: 21px;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.8;
+  }
+
+  .mobile-settings-link.active {
+    display: none;
+  }
+
+  .collection-screen .screen-header {
+    padding-right: 54px;
   }
 
   .screen {

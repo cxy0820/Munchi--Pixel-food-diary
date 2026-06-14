@@ -986,12 +986,12 @@ const Shell = ({
   );
 };
 
-const removeBackground = async (file: File) => {
+const removeBackground = async (image: Blob) => {
   const tokenResponse = await fetch("/api/csrf-token");
   if (!tokenResponse.ok) throw new Error("Could not prepare a sticker request.");
   const { token } = (await tokenResponse.json()) as { token: string };
   const form = new FormData();
-  form.append("image_file", file);
+  form.append("image_file", image, image instanceof File ? image.name : "photo.jpg");
   const response = await fetch("/api/remove-background", {
     method: "POST",
     headers: { "x-csrf-token": token },
@@ -1004,12 +1004,12 @@ const removeBackground = async (file: File) => {
   return response.blob();
 };
 
-const analyzeFood = async (file: File, language: Language) => {
+const analyzeFood = async (image: Blob, language: Language) => {
   const tokenResponse = await fetch("/api/csrf-token");
   if (!tokenResponse.ok) throw new Error("Could not prepare food recognition.");
   const { token } = (await tokenResponse.json()) as { token: string };
   const form = new FormData();
-  form.append("image_file", file);
+  form.append("image_file", image, image instanceof File ? image.name : "photo.jpg");
   form.append("language", language);
   const response = await fetch("/api/analyze-food", {
     method: "POST",
@@ -1402,18 +1402,14 @@ function AddCapture({ language, draft, setDraft, toast }: { language: Language; 
     if (!file) return;
     setDraft({ ...initialDraft, source, file, originalBlob: file });
     navigate("/app/add/preview");
+    const processingImage = await shrinkImageBlob(file).catch(() => file);
+    const analysisPromise = analyzeFood(processingImage, language).catch(() => undefined);
     try {
-      const [cutoutResult, analysisResult] = await Promise.allSettled([removeBackground(file), analyzeFood(file, language)]);
-      if (cutoutResult.status === "rejected") {
-        const message = cutoutResult.reason instanceof Error ? cutoutResult.reason.message : "Background removal failed.";
-        setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
-        return;
-      }
-      const cutoutBlob = cutoutResult.value;
-      const analysis = analysisResult.status === "fulfilled" ? analysisResult.value : undefined;
-      setDraft((current) => current.file === file ? { ...current, cutoutBlob, analysis, prepError: undefined, pixelError: undefined } : current);
-      if (analysisResult.status === "rejected") toast(t.cutoutFoodSetup);
-      else toast(t.cutoutReady);
+      const cutoutBlob = await removeBackground(processingImage);
+      setDraft((current) => current.file === file ? { ...current, cutoutBlob, prepError: undefined, pixelError: undefined } : current);
+      toast(t.cutoutReady);
+      const analysis = await analysisPromise;
+      if (analysis) setDraft((current) => current.file === file ? { ...current, analysis } : current);
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : "Background removal failed.";
       setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
@@ -2273,8 +2269,19 @@ function Collection({ language, records, urls }: { language: Language; records: 
   }
 
   return (
-    <div className="screen">
-      <Header eyebrow={t.eyebrow} title={t.title} />
+    <div className="screen collection-screen">
+      <Header
+        eyebrow={t.eyebrow}
+        title={t.title}
+        action={(
+          <NavLink className="mobile-settings-link" to="/app/settings" aria-label={copy[language].nav.settings}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.05.05a2 2 0 0 1-2.83 2.83l-.05-.05a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 0 1-4 0v-.07a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.88.34l-.05.05a2 2 0 0 1-2.83-2.83l.05-.05A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 0 1 0-4h.07A1.7 1.7 0 0 0 4.6 8.94a1.7 1.7 0 0 0-.34-1.88l-.05-.05a2 2 0 0 1 2.83-2.83l.05.05a1.7 1.7 0 0 0 1.88.34A1.7 1.7 0 0 0 10 3.01V3a2 2 0 0 1 4 0v.07a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.88-.34l.05-.05a2 2 0 0 1 2.83 2.83l-.05.05a1.7 1.7 0 0 0-.34 1.88 1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 0 1 0 4h-.07A1.7 1.7 0 0 0 19.4 15Z" />
+            </svg>
+          </NavLink>
+        )}
+      />
       <section className="paper-panel pixel-dex-hero pixel-dex-book">
         <div className="section-heading">
           <div>
