@@ -1,4 +1,4 @@
-﻿import type { Collage, ExportedData, FoodRecord, Settings, StickerAsset } from "./types";
+﻿import type { Collage, ExportedAsset, ExportedData, FoodRecord, Settings, StickerAsset } from "./types";
 
 const DB_NAME = "siplog-db";
 const DB_VERSION = 1;
@@ -122,9 +122,38 @@ export const blobToDataUrl = (blob: Blob) =>
     reader.readAsDataURL(blob);
   });
 
-export const dataUrlToBlob = async (dataUrl: string) => {
-  const response = await fetch(dataUrl);
-  return response.blob();
+export const dataUrlToBlob = (dataUrl: string) => {
+  const match = /^data:([^;,]+)?(;base64)?,(.*)$/s.exec(dataUrl);
+  if (!match) throw new Error("Invalid data URL.");
+  const mimeType = match[1] || "application/octet-stream";
+  if (!match[2]) return new Blob([decodeURIComponent(match[3])], { type: mimeType });
+  const binary = atob(match[3]);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mimeType });
+};
+
+const isExportedData = (data: unknown): data is ExportedData => {
+  if (!data || typeof data !== "object") return false;
+  const value = data as ExportedData;
+  return value.version === 1
+    && Array.isArray(value.assets)
+    && Array.isArray(value.records)
+    && Array.isArray(value.collages)
+    && !!value.settings
+    && typeof value.settings === "object";
+};
+
+const restoreAsset = (asset: ExportedAsset): StickerAsset => {
+  if (!asset.id || !asset.createdAt || !asset.originalDataUrl || !asset.cutoutDataUrl) {
+    throw new Error("Invalid Munchi asset.");
+  }
+  return {
+    id: asset.id,
+    createdAt: asset.createdAt,
+    originalBlob: dataUrlToBlob(asset.originalDataUrl),
+    cutoutBlob: dataUrlToBlob(asset.cutoutDataUrl)
+  };
 };
 
 export const exportData = async (settings: Settings): Promise<ExportedData> => {
@@ -145,19 +174,13 @@ export const exportData = async (settings: Settings): Promise<ExportedData> => {
   };
 };
 
-export const importData = async (data: ExportedData) => {
-  if (data.version !== 1) throw new Error("Unsupported Munchi export.");
+export const importData = async (data: unknown) => {
+  if (!isExportedData(data)) throw new Error("Unsupported Munchi export.");
+  const assets = data.assets.map(restoreAsset);
   await clearStore("assets");
   await clearStore("records");
   await clearStore("collages");
-  for (const asset of data.assets) {
-    await putItem("assets", {
-      id: asset.id,
-      createdAt: asset.createdAt,
-      originalBlob: await dataUrlToBlob(asset.originalDataUrl),
-      cutoutBlob: await dataUrlToBlob(asset.cutoutDataUrl)
-    } satisfies StickerAsset);
-  }
+  for (const asset of assets) await putItem("assets", asset);
   for (const record of data.records) await putItem("records", record);
   for (const collage of data.collages) await putItem("collages", collage);
   saveSettings(data.settings);

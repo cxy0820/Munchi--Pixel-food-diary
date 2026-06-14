@@ -538,6 +538,7 @@ html[lang="zh-CN"] .tool-panel .status {
 }
 
 .desktop-nav a {
+  position: relative;
   min-height: 44px;
   padding: 0 13px;
   border: 1px solid transparent;
@@ -552,6 +553,32 @@ html[lang="zh-CN"] .tool-panel .status {
   background: var(--accent-soft);
   color: var(--ink);
   box-shadow: var(--pixel-shadow-soft);
+}
+
+.desktop-nav a.has-sticker-ready {
+  padding-right: 42px;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: var(--pixel-shadow-soft), 0 0 0 4px rgba(255, 232, 156, .36);
+}
+
+.desktop-nav .add-ready-badge {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--butter);
+  color: var(--ink);
+  font-family: var(--pixel-font);
+  font-size: 11px;
+  line-height: 1;
 }
 
 .content-frame {

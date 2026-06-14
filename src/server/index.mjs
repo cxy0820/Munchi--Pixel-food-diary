@@ -1,4 +1,7 @@
 ﻿import crypto from "node:crypto";
+import { execFile } from "node:child_process";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
@@ -7,6 +10,9 @@ import multer from "multer";
 
 dotenv.config();
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, "../..");
+const dist = path.resolve(projectRoot, "dist");
 const app = express();
 const port = Number(process.env.PORT || 5173);
 const csrfToken = crypto.randomBytes(32).toString("hex");
@@ -26,6 +32,58 @@ const isImageBuffer = (buffer) => {
   const webp = buffer.toString("ascii", 0, 4) === "RIFF" && buffer.toString("ascii", 8, 12) === "WEBP";
   const heic = buffer.toString("ascii", 4, 12).includes("ftyphei") || buffer.toString("ascii", 4, 12).includes("ftypmif");
   return png || jpg || webp || heic;
+};
+
+const extensionForMime = (mimetype) => {
+  const extensions = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/webp": ".webp",
+    "image/heic": ".heic",
+    "image/heif": ".heif"
+  };
+  return extensions[mimetype] || ".jpg";
+};
+
+const removeBackgroundWithRembg = async (file) => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "munchi-rembg-"));
+  const inputPath = path.join(tempDir, `input${extensionForMime(file.mimetype)}`);
+  const outputPath = path.join(tempDir, "output.png");
+  const pythonPath =
+    process.env.REMBG_PYTHON ||
+    path.join(projectRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
+  const scriptPath = path.join(projectRoot, "scripts", "rembg_remove.py");
+  const modelHome = process.env.U2NET_HOME || path.join(projectRoot, "models", "rembg");
+  const model = process.env.REMBG_MODEL || "u2net";
+  const timeout = Number(process.env.REMBG_TIMEOUT_MS || 300_000);
+
+  try {
+    await writeFile(inputPath, file.buffer);
+    await new Promise((resolve, reject) => {
+      execFile(
+        pythonPath,
+        [scriptPath, "--model", model, inputPath, outputPath],
+        {
+          cwd: projectRoot,
+          env: { ...process.env, U2NET_HOME: modelHome, PYTHONIOENCODING: "utf-8" },
+          maxBuffer: 1024 * 1024,
+          timeout,
+          windowsHide: true
+        },
+        (error, _stdout, stderr) => {
+          if (error) {
+            error.stderr = stderr;
+            reject(error);
+            return;
+          }
+          resolve();
+        }
+      );
+    });
+    return readFile(outputPath);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 };
 
 const securityHeaders = (_req, res, next) => {
@@ -84,49 +142,33 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
     return;
   }
 
-  const provider = (process.env.BACKGROUND_PROVIDER || (process.env.REMOVE_BG_API_KEY ? "removebg" : "clipdrop")).toLowerCase();
-  const form = new FormData();
-  form.append("image_file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "photo.jpg");
+  const provider = (process.env.BACKGROUND_PROVIDER || "rembg").toLowerCase();
 
-  if (provider === "removebg") {
-    if (!process.env.REMOVE_BG_API_KEY) {
-      res.status(503).json({ error: "remove.bg is not configured. Add REMOVE_BG_API_KEY to .env and restart the server." });
-      return;
-    }
-
-    form.append("size", "auto");
-
+  if (provider === "rembg" || provider === "removebg") {
     try {
-      const response = await fetch("https://api.remove.bg/v1.0/removebg", {
-        method: "POST",
-        headers: { "X-Api-Key": process.env.REMOVE_BG_API_KEY },
-        body: form
-      });
-
-      if (!response.ok) {
-        const fallback = {
-          401: "remove.bg rejected the API key. Check REMOVE_BG_API_KEY.",
-          402: "remove.bg has no credits left for this account.",
-          403: "remove.bg says this API key cannot use background removal.",
-          429: "remove.bg is rate limiting requests. Please try again soon."
-        };
-        const text = await response.text().catch(() => "");
-        res.status(response.status).json({ error: fallback[response.status] || text || "remove.bg could not remove the background." });
-        return;
-      }
-
-      const result = Buffer.from(await response.arrayBuffer());
-      res.setHeader("Content-Type", response.headers.get("content-type") || "image/png");
+      const result = await removeBackgroundWithRembg(req.file);
+      res.setHeader("Content-Type", "image/png");
       res.setHeader("Cache-Control", "no-store");
       res.send(result);
-    } catch {
-      res.status(502).json({ error: "Could not reach remove.bg. Check your network and try again." });
+    } catch (error) {
+      if (error?.code === "ENOENT") {
+        res.status(503).json({ error: "Local rembg is not installed. Run the rembg setup in this project and restart the server." });
+        return;
+      }
+      if (error?.killed || error?.signal === "SIGTERM") {
+        res.status(504).json({ error: "Local rembg took too long. Try a smaller image or increase REMBG_TIMEOUT_MS." });
+        return;
+      }
+      res.status(502).json({ error: "Local rembg could not remove the background. Try a PNG, JPG, WebP, or HEIC photo." });
     }
     return;
   }
 
+  const form = new FormData();
+  form.append("image_file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "photo.jpg");
+
   if (provider !== "clipdrop") {
-    res.status(503).json({ error: "Unknown background removal provider. Use BACKGROUND_PROVIDER=removebg or BACKGROUND_PROVIDER=clipdrop." });
+    res.status(503).json({ error: "Unknown background removal provider. Use BACKGROUND_PROVIDER=rembg or BACKGROUND_PROVIDER=clipdrop." });
     return;
   }
 
@@ -184,6 +226,8 @@ app.post("/api/analyze-food", limiter, upload.single("image_file"), async (req, 
     return;
   }
 
+  const language = req.body?.language === "zh" ? "zh" : "en";
+  const responseLanguage = language === "zh" ? "Simplified Chinese" : "English";
   const dataUrl = `data:${req.file.mimetype};base64,${req.file.buffer.toString("base64")}`;
 
   try {
@@ -201,7 +245,7 @@ app.post("/api/analyze-food", limiter, upload.single("image_file"), async (req, 
             content: [
               {
                 type: "input_text",
-                text: "Identify the main food or drink in this image for a cozy pixel food diary. Return a short memory-friendly note. Do not give medical, dieting, or nutrition advice."
+                text: `Identify the main food or drink in this image for a cozy pixel food diary. Return the name and note in ${responseLanguage}. Keep category as one exact English enum value. Return a short memory-friendly note. Do not give medical, dieting, or nutrition advice.`
               },
               {
                 type: "input_image",
@@ -319,8 +363,6 @@ app.post("/api/pixel-sticker", limiter, upload.single("image_file"), async (req,
   }
 });
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const dist = path.resolve(__dirname, "../../dist");
 app.use(express.static(dist, { index: false }));
 app.use((_req, res, next) => {
   res.sendFile(path.join(dist, "index.html"), (error) => {
@@ -328,7 +370,10 @@ app.use((_req, res, next) => {
   });
 });
 
-app.listen(port, "0.0.0.0", () => {
+const server = app.listen(port, "0.0.0.0", () => {
   console.log(`Munchi running at http://127.0.0.1:${port}`);
   console.log("For phone testing, open http://YOUR-COMPUTER-IP:" + port);
 });
+
+process.on("SIGTERM", () => server.close(() => process.exit(0)));
+process.on("SIGINT", () => server.close(() => process.exit(0)));

@@ -9,7 +9,7 @@ import {
   putItem,
   saveSettings
 } from "./storage";
-import type { Collage, CollageBackground, CollageDecorItem, CollageExportPreset, CollageItem, CollageTextItem, ExportedData, FoodRecord, Language, Rating, Settings, Source, StickerAsset, StickerStyle } from "./types";
+import type { Collage, CollageBackground, CollageDecorItem, CollageExportPreset, CollageItem, CollageTextItem, FoodRecord, Language, Rating, Settings, Source, StickerAsset, StickerStyle } from "./types";
 
 const categories = ["Milk tea", "Coffee", "Drink", "Meal", "Dessert", "Snack", "Fruit", "Homemade", "Restaurant", "Other"];
 const copy = {
@@ -306,7 +306,7 @@ const copy = {
       continue: "很可爱，继续",
       step3: "第 3 步 / 填写小记录",
       recordTitle: "记录这口小食光",
-      recognized: (name: string, confidence: string) => `AI 猜它是 ${name}，可信度：${confidence}。`,
+      recognized: (name: string, confidence: string) => `AI 猜它是 ${name}，可信度：${({ low: "低", medium: "中", high: "高" } as Record<string, string>)[confidence] || confidence}。`,
       name: "名字",
       category: "分类",
       rating: "喜欢程度",
@@ -962,7 +962,10 @@ const Shell = ({
         <nav className="desktop-nav" aria-label={t.primary}>
           <NavLink to="/app/today">{t.today}</NavLink>
           <NavLink to="/app/calendar">{t.calendar}</NavLink>
-          <NavLink to="/app/add">{t.add}</NavLink>
+          <NavLink className={stickerReady ? "has-sticker-ready" : ""} to={addTarget} onClick={onOpenAdd} aria-label={stickerReady ? t.stickerReady : undefined}>
+            {t.add}
+            {stickerReady && <span className="add-ready-badge" aria-hidden="true">✓</span>}
+          </NavLink>
           <NavLink to="/app/collage">{t.collage}</NavLink>
           <NavLink to="/app/collection">{t.collection}</NavLink>
           <NavLink to="/app/settings">{t.settings}</NavLink>
@@ -1001,12 +1004,13 @@ const removeBackground = async (file: File) => {
   return response.blob();
 };
 
-const analyzeFood = async (file: File) => {
+const analyzeFood = async (file: File, language: Language) => {
   const tokenResponse = await fetch("/api/csrf-token");
   if (!tokenResponse.ok) throw new Error("Could not prepare food recognition.");
   const { token } = (await tokenResponse.json()) as { token: string };
   const form = new FormData();
   form.append("image_file", file);
+  form.append("language", language);
   const response = await fetch("/api/analyze-food", {
     method: "POST",
     headers: { "x-csrf-token": token },
@@ -1399,7 +1403,7 @@ function AddCapture({ language, draft, setDraft, toast }: { language: Language; 
     setDraft({ ...initialDraft, source, file, originalBlob: file });
     navigate("/app/add/preview");
     try {
-      const [cutoutResult, analysisResult] = await Promise.allSettled([removeBackground(file), analyzeFood(file)]);
+      const [cutoutResult, analysisResult] = await Promise.allSettled([removeBackground(file), analyzeFood(file, language)]);
       if (cutoutResult.status === "rejected") {
         const message = cutoutResult.reason instanceof Error ? cutoutResult.reason.message : "Background removal failed.";
         setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
@@ -2409,12 +2413,14 @@ function SettingsView({
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const data = JSON.parse(await file.text()) as ExportedData;
+      const data = JSON.parse((await file.text()).replace(/^\uFEFF/, ""));
       await importData(data);
       await reload();
       toast(t.imported);
     } catch {
       toast(t.importFailed);
+    } finally {
+      event.target.value = "";
     }
   };
 
@@ -2437,7 +2443,7 @@ function SettingsView({
       <section className="card stack-actions">
         <button className="secondary-btn" onClick={downloadExport}>{t.export}</button>
         <button className="secondary-btn" onClick={() => fileRef.current?.click()}>{t.import}</button>
-        <input ref={fileRef} hidden type="file" accept="application/json" onChange={importFile} />
+        <input ref={fileRef} hidden type="file" accept=".json,application/json" onChange={importFile} />
       </section>
       <section className="journal-preview">
         <h2>{t.aboutTitle}</h2>
@@ -2559,7 +2565,9 @@ export default function App() {
   const addTarget = draft.stickerBlob ? "/app/add/details" : draft.originalBlob ? "/app/add/preview" : "/app/add";
   const showStickerReadyBadge = pixelJobStatus === "ready" && Boolean(draft.stickerBlob) && !stickerReadySeen && !location.pathname.startsWith("/app/add");
   const shell = (children: React.ReactNode) => (
-    <Shell language={language} addTarget={addTarget} stickerReady={showStickerReadyBadge} onOpenAdd={() => setStickerReadySeen(true)}>
+    <Shell language={language} addTarget={addTarget} stickerReady={showStickerReadyBadge} onOpenAdd={() => {
+      if (showStickerReadyBadge) setStickerReadySeen(true);
+    }}>
       {children}
     </Shell>
   );

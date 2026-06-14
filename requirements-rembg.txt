@@ -1,0 +1,2 @@
+rembg[cpu]==2.0.76
+pillow-heif==1.4.0
