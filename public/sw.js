@@ -1,4 +1,4 @@
-const CACHE_NAME = "munchi-v5";
+const CACHE_NAME = "munchi-v6";
 const APP_SHELL = ["/", "/app/today", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
