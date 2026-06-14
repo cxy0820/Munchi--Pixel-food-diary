@@ -1,0 +1,9 @@
+node_modules
+dist
+.venv
+models
+outputs
+.env
+.git
+*.log
+*.tsbuildinfo

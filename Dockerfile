@@ -1,0 +1,39 @@
+FROM node:24-bookworm-slim
+
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    libgomp1 \
+    python3 \
+    python3-pip \
+    python3-venv \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY requirements-rembg.txt ./
+RUN python3 -m venv .venv \
+  && .venv/bin/python -m pip install --no-cache-dir --upgrade pip \
+  && .venv/bin/python -m pip install --no-cache-dir -r requirements-rembg.txt
+
+ENV BACKGROUND_PROVIDER=rembg \
+    REMBG_PYTHON=/app/.venv/bin/python \
+    U2NET_HOME=/app/models/rembg \
+    REMBG_MODEL=u2net \
+    REMBG_TIMEOUT_MS=300000
+
+COPY . .
+
+RUN npm run build
+RUN mkdir -p /app/models/rembg \
+  && .venv/bin/python -c "from rembg import new_session; new_session('u2net')" \
+  && chown -R node:node /app
+
+USER node
+
+EXPOSE 10000
+
+CMD ["npm", "start"]
