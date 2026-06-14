@@ -1,0 +1,12 @@
+node_modules
+.venv
+models
+dist
+.env
+.DS_Store
+*.log
+.tools
+.npm-cache
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
