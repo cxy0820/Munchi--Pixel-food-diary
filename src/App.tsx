@@ -13,7 +13,7 @@ import type { Collage, CollageBackground, CollageDecorItem, CollageExportPreset,
 import type { ProgressInfo } from "@huggingface/transformers";
 
 const categories = ["Milk tea", "Coffee", "Drink", "Meal", "Dessert", "Snack", "Fruit", "Homemade", "Restaurant", "Other"];
-const appBuildId = "bria-local-cutout-v5";
+const appBuildId = "bria-local-cutout-v6";
 const ortWasmModuleUrl = "/assets/ort-wasm-simd-threaded.asyncify.mjs";
 const ortWasmBinaryUrl = "/assets/ort-wasm-simd-threaded.asyncify.wasm";
 const copy = {
@@ -1037,7 +1037,7 @@ const clearCutoutModelCache = async () => {
   if (!("caches" in window)) return;
   const cacheNames = await caches.keys();
   await Promise.all(cacheNames
-    .filter((cacheName) => cacheName.includes("transformers") || cacheName.includes("huggingface") || cacheName.includes("munchi-cutout"))
+    .filter((cacheName) => cacheName.includes("transformers") || cacheName.includes("huggingface") || cacheName.includes("munchi-cutout") || cacheName.startsWith("munchi-v"))
     .map((cacheName) => caches.delete(cacheName)));
 };
 
@@ -1094,6 +1094,7 @@ const loadBriaCutout = async (onProgress: (progress: CutoutProgress) => void) =>
       const briaEnv = env as typeof env & {
         useBrowserCache: boolean;
         useCustomCache: boolean;
+        useWasmCache: boolean;
         experimental_useCrossOriginStorage: boolean;
         fetch: typeof fetch;
       };
@@ -1102,6 +1103,7 @@ const loadBriaCutout = async (onProgress: (progress: CutoutProgress) => void) =>
       briaEnv.allowRemoteModels = true;
       briaEnv.useBrowserCache = false;
       briaEnv.useCustomCache = false;
+      briaEnv.useWasmCache = false;
       briaEnv.experimental_useCrossOriginStorage = false;
       briaEnv.fetch = async (input, init) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;

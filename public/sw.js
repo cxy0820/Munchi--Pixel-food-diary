@@ -1,4 +1,4 @@
-const CACHE_NAME = "munchi-v6";
+const CACHE_NAME = "munchi-v7";
 const APP_SHELL = ["/", "/app/today", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -15,14 +15,22 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (url.pathname.startsWith("/api/") || event.request.method !== "GET") return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith("/api/") || event.request.method !== "GET") return;
+  if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/models/")) return;
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        if (response.ok && response.type === "basic") {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+        }
         return response;
       })
-      .catch(() => caches.match(event.request).then((cached) => cached || caches.match("/")))
+      .catch(() => {
+        if (event.request.mode === "navigate") {
+          return caches.match(event.request).then((cached) => cached || caches.match("/"));
+        }
+        return caches.match(event.request);
+      })
   );
 });
