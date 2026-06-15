@@ -54,7 +54,8 @@ const removeBackgroundWithRembg = async (file) => {
     path.join(projectRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   const scriptPath = path.join(projectRoot, "scripts", "rembg_remove.py");
   const modelHome = process.env.U2NET_HOME || path.join(projectRoot, "models", "rembg");
-  const model = process.env.REMBG_MODEL || "u2netp";
+  const requestedModel = process.env.REMBG_MODEL || "u2netp";
+  const model = process.env.RENDER && requestedModel === "u2net" && process.env.ALLOW_HEAVY_REMBG !== "true" ? "u2netp" : requestedModel;
   const timeout = Number(process.env.REMBG_TIMEOUT_MS || 300_000);
 
   try {
@@ -65,7 +66,16 @@ const removeBackgroundWithRembg = async (file) => {
         [scriptPath, "--model", model, inputPath, outputPath],
         {
           cwd: projectRoot,
-          env: { ...process.env, U2NET_HOME: modelHome, PYTHONIOENCODING: "utf-8" },
+          env: {
+            ...process.env,
+            U2NET_HOME: modelHome,
+            PYTHONIOENCODING: "utf-8",
+            OMP_NUM_THREADS: process.env.OMP_NUM_THREADS || "1",
+            OPENBLAS_NUM_THREADS: process.env.OPENBLAS_NUM_THREADS || "1",
+            MKL_NUM_THREADS: process.env.MKL_NUM_THREADS || "1",
+            NUMEXPR_NUM_THREADS: process.env.NUMEXPR_NUM_THREADS || "1",
+            VECLIB_MAXIMUM_THREADS: process.env.VECLIB_MAXIMUM_THREADS || "1"
+          },
           maxBuffer: 1024 * 1024,
           timeout,
           windowsHide: true

@@ -17,10 +17,11 @@ The landing page lives at `/`. The working app lives under `/app/today`.
 2. Create `.env` from `.env.example` and add your API keys:
 
    ```bash
-   BACKGROUND_PROVIDER=removebg
-   REMOVE_BG_API_KEY=your_remove_bg_api_key_here
+   BACKGROUND_PROVIDER=rembg
+   ALLOW_LOCAL_REMBG=true
    REMBG_MODEL=u2netp
-   REMBG_TIMEOUT_MS=300000
+   REMBG_TIMEOUT_MS=120000
+   REMOVE_BG_API_KEY=your_remove_bg_api_key_here
    CLIPDROP_API_KEY=your_clipdrop_api_key_here
    OPENAI_API_KEY=your_openai_api_key_here
    OPENAI_MODEL=gpt-5.5
@@ -54,7 +55,7 @@ For phone testing, keep the terminal open and open `http://YOUR-COMPUTER-IP:5173
 
 The frontend never receives API keys.
 
-- `/api/remove-background` uses remove.bg by default on hosted deployments. Set `BACKGROUND_PROVIDER=rembg` for local rembg, or `BACKGROUND_PROVIDER=clipdrop` for Clipdrop.
+- `/api/remove-background` uses local `rembg` with the lightweight `u2netp` model by default. Set `BACKGROUND_PROVIDER=removebg` for remove.bg, or `BACKGROUND_PROVIDER=clipdrop` for Clipdrop.
 - `/api/analyze-food` sends the image to OpenAI vision and returns name, category, confidence, and a short note.
 - `/api/pixel-sticker` sends the transparent cutout to OpenAI Images and returns a warm 16-bit pixel item icon.
 - The Add flow runs cutout, food naming, and pixel sticker generation. A pixel sticker is required before saving.

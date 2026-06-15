@@ -19,11 +19,18 @@ RUN python3 -m venv .venv \
   && .venv/bin/python -m pip install --no-cache-dir --upgrade pip \
   && .venv/bin/python -m pip install --no-cache-dir -r requirements-rembg.txt
 
-ENV BACKGROUND_PROVIDER=removebg \
+ENV BACKGROUND_PROVIDER=rembg \
+    ALLOW_LOCAL_REMBG=true \
     REMBG_PYTHON=/app/.venv/bin/python \
     U2NET_HOME=/app/models/rembg \
     REMBG_MODEL=u2netp \
-    REMBG_TIMEOUT_MS=300000
+    REMBG_TIMEOUT_MS=120000 \
+    OMP_NUM_THREADS=1 \
+    OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    VECLIB_MAXIMUM_THREADS=1 \
+    MALLOC_ARENA_MAX=2
 
 COPY . .
 
