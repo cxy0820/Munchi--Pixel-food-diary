@@ -13,7 +13,8 @@ import type { Collage, CollageBackground, CollageDecorItem, CollageExportPreset,
 import type { ProgressInfo } from "@huggingface/transformers";
 
 const categories = ["Milk tea", "Coffee", "Drink", "Meal", "Dessert", "Snack", "Fruit", "Homemade", "Restaurant", "Other"];
-const appBuildId = "bria-local-cutout-v6";
+const appBuildId = "bria-local-cutout-v7";
+const cutoutCacheName = `munchi-cutout-${appBuildId}`;
 const ortWasmModuleUrl = "/assets/ort-wasm-simd-threaded.asyncify.mjs";
 const ortWasmBinaryUrl = "/assets/ort-wasm-simd-threaded.asyncify.wasm";
 const copy = {
@@ -1095,19 +1096,21 @@ const loadBriaCutout = async (onProgress: (progress: CutoutProgress) => void) =>
         useBrowserCache: boolean;
         useCustomCache: boolean;
         useWasmCache: boolean;
+        cacheKey: string;
         experimental_useCrossOriginStorage: boolean;
         fetch: typeof fetch;
       };
       await prepareCutoutModelCache();
       briaEnv.allowLocalModels = false;
       briaEnv.allowRemoteModels = true;
-      briaEnv.useBrowserCache = false;
+      briaEnv.cacheKey = cutoutCacheName;
+      briaEnv.useBrowserCache = true;
       briaEnv.useCustomCache = false;
-      briaEnv.useWasmCache = false;
+      briaEnv.useWasmCache = true;
       briaEnv.experimental_useCrossOriginStorage = false;
       briaEnv.fetch = async (input, init) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
-        const response = await fetch(input, url.includes("briaai/RMBG-1.4") ? { ...init, cache: "reload" } : init);
+        const response = await fetch(input, init);
         if (url.includes("briaai/RMBG-1.4") && (response.headers.get("content-type") || "").includes("text/html")) {
           throw new Error("BRIA model request returned HTML instead of model data.");
         }
