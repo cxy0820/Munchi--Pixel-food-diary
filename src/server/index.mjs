@@ -142,7 +142,14 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
     return;
   }
 
-  const provider = (process.env.BACKGROUND_PROVIDER || (process.env.REMOVE_BG_API_KEY ? "removebg" : "rembg")).toLowerCase();
+  let provider = (process.env.BACKGROUND_PROVIDER || (process.env.REMOVE_BG_API_KEY ? "removebg" : "rembg")).toLowerCase();
+  if (provider === "rembg" && process.env.ALLOW_LOCAL_REMBG !== "true") {
+    if (!process.env.REMOVE_BG_API_KEY) {
+      res.status(503).json({ error: "Hosted local rembg is disabled. Set BACKGROUND_PROVIDER=removebg and add REMOVE_BG_API_KEY." });
+      return;
+    }
+    provider = "removebg";
+  }
 
   if (provider === "removebg") {
     if (!process.env.REMOVE_BG_API_KEY) {
