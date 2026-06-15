@@ -10,8 +10,12 @@ import {
   saveSettings
 } from "./storage";
 import type { Collage, CollageBackground, CollageDecorItem, CollageExportPreset, CollageItem, CollageTextItem, FoodRecord, Language, Rating, Settings, Source, StickerAsset, StickerStyle } from "./types";
+import type { ProgressInfo } from "@huggingface/transformers";
 
 const categories = ["Milk tea", "Coffee", "Drink", "Meal", "Dessert", "Snack", "Fruit", "Homemade", "Restaurant", "Other"];
+const appBuildId = "bria-local-cutout-v5";
+const ortWasmModuleUrl = "/assets/ort-wasm-simd-threaded.asyncify.mjs";
+const ortWasmBinaryUrl = "/assets/ort-wasm-simd-threaded.asyncify.wasm";
 const copy = {
   en: {
     languageName: "English",
@@ -110,6 +114,11 @@ const copy = {
       willAppear: "Pixel art will appear here",
       cutoutHelp: "Try another photo so Munchi can isolate the food cleanly.",
       preparingHelp: "Munchi is removing the background before pixel art starts.",
+      cutoutProgressLabel: "Cutout progress",
+      cutoutProgress: {
+        browserDownload: "Loading BRIA cutout model",
+        browserCompute: "Cutting out the photo"
+      },
       creatingHelp: "You can visit other pages while Munchi builds the 16-bit version.",
       pixelCutoutTitle: "Pixel cutout needs attention",
       pixelFailed: "Pixel magic failed",
@@ -298,6 +307,11 @@ const copy = {
       willAppear: "像素贴纸会出现在这里",
       cutoutHelp: "换一张更清晰的照片，让 Munchi 更好地认出食物。",
       preparingHelp: "Munchi 正在先把背景轻轻擦掉。",
+      cutoutProgressLabel: "抠图进度",
+      cutoutProgress: {
+        browserDownload: "正在加载 BRIA 抠图模型",
+        browserCompute: "正在抠图"
+      },
       creatingHelp: "你可以先逛别的页面，Munchi 会慢慢把它变成 16-bit 小贴纸。",
       pixelCutoutTitle: "像素抠图需要再试试",
       pixelFailed: "像素魔法失败了",
@@ -517,10 +531,40 @@ type Draft = {
   cutoutBlob?: Blob;
   pixelBlob?: Blob;
   stickerBlob?: Blob;
+  prepProgress?: CutoutProgress;
   prepError?: string;
   pixelError?: string;
   analysis?: FoodAnalysis;
   style: StickerStyle;
+};
+
+type CutoutProgress = {
+  stage: "browserDownload" | "browserCompute";
+  percent: number;
+};
+
+type BriaTensor = {
+  [index: number]: BriaTensor;
+  mul(value: number): BriaTensor;
+  to(type: "uint8"): BriaTensor;
+};
+
+type BriaRawImage = {
+  width: number;
+  height: number;
+  channels: number;
+  data: Uint8ClampedArray;
+  resize(width: number, height: number): BriaRawImage | Promise<BriaRawImage>;
+  toCanvas(): HTMLCanvasElement | OffscreenCanvas;
+};
+
+type BriaCutout = {
+  model(input: { input: unknown }): Promise<{ output: BriaTensor }>;
+  processor(image: BriaRawImage): Promise<{ pixel_values: unknown }>;
+  RawImage: {
+    fromBlob(image: Blob): Promise<BriaRawImage>;
+    fromTensor(tensor: BriaTensor): BriaRawImage | Promise<BriaRawImage>;
+  };
 };
 
 type FoodAnalysis = {
@@ -986,22 +1030,202 @@ const Shell = ({
   );
 };
 
-const removeBackground = async (image: Blob) => {
+let briaCutoutPromise: Promise<BriaCutout> | undefined;
+let cutoutCacheReadyPromise: Promise<void> | undefined;
+
+const clearCutoutModelCache = async () => {
+  if (!("caches" in window)) return;
+  const cacheNames = await caches.keys();
+  await Promise.all(cacheNames
+    .filter((cacheName) => cacheName.includes("transformers") || cacheName.includes("huggingface") || cacheName.includes("munchi-cutout"))
+    .map((cacheName) => caches.delete(cacheName)));
+};
+
+const prepareCutoutModelCache = async () => {
+  if (cutoutCacheReadyPromise) return cutoutCacheReadyPromise;
+  cutoutCacheReadyPromise = (async () => {
+    const storageKey = "munchi-cutout-build";
+    if (window.localStorage.getItem(storageKey) === appBuildId) return;
+    await clearCutoutModelCache();
+    window.localStorage.setItem(storageKey, appBuildId);
+  })();
+  return cutoutCacheReadyPromise;
+};
+
+const isStaleCutoutCacheError = (error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("Unexpected token '<'")
+    || message.includes("<!doctype")
+    || message.includes("not valid JSON")
+    || message.includes("HTML instead of model data");
+};
+
+const cutoutErrorMessage = (error: unknown, language: Language) => {
+  if (isStaleCutoutCacheError(error)) {
+    return language === "zh"
+      ? "抠图模型缓存异常，刷新页面后会自动重新加载模型。"
+      : "The cutout model cache is stale. Refresh to reload the model.";
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("Local BRIA cutout")) {
+    return language === "zh"
+      ? "本机 BRIA 抠图没成功，请刷新页面或换一张更清晰的照片。"
+      : "Local BRIA cutout could not remove the background. Refresh or try a clearer photo.";
+  }
+  return error instanceof Error ? error.message : "Background removal failed.";
+};
+
+const loadBriaCutout = async (onProgress: (progress: CutoutProgress) => void) => {
+  let lastPercent = 1;
+  const updateDownloadProgress = (progress: ProgressInfo) => {
+    if (progress.status === "progress_total" || progress.status === "progress") {
+      lastPercent = Math.max(lastPercent, clamp(Math.round(progress.progress * 0.75), 1, 75));
+      onProgress({ stage: "browserDownload", percent: lastPercent });
+    }
+    if (progress.status === "ready" || progress.status === "done") {
+      lastPercent = Math.max(lastPercent, 75);
+      onProgress({ stage: "browserDownload", percent: lastPercent });
+    }
+  };
+
+  onProgress({ stage: "browserDownload", percent: 1 });
+  if (!briaCutoutPromise) {
+    briaCutoutPromise = import("@huggingface/transformers").then(async ({ AutoModel, AutoProcessor, RawImage, env }) => {
+      const briaEnv = env as typeof env & {
+        useBrowserCache: boolean;
+        useCustomCache: boolean;
+        experimental_useCrossOriginStorage: boolean;
+        fetch: typeof fetch;
+      };
+      await prepareCutoutModelCache();
+      briaEnv.allowLocalModels = false;
+      briaEnv.allowRemoteModels = true;
+      briaEnv.useBrowserCache = false;
+      briaEnv.useCustomCache = false;
+      briaEnv.experimental_useCrossOriginStorage = false;
+      briaEnv.fetch = async (input, init) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+        const response = await fetch(input, url.includes("briaai/RMBG-1.4") ? { ...init, cache: "reload" } : init);
+        if (url.includes("briaai/RMBG-1.4") && (response.headers.get("content-type") || "").includes("text/html")) {
+          throw new Error("BRIA model request returned HTML instead of model data.");
+        }
+        return response;
+      };
+      const onnxWasm = env.backends.onnx.wasm;
+      if (!onnxWasm) throw new Error("Browser cutout engine is not available.");
+      onnxWasm.numThreads = 1;
+      onnxWasm.proxy = false;
+      onnxWasm.wasmPaths = {
+        mjs: ortWasmModuleUrl,
+        wasm: ortWasmBinaryUrl
+      };
+      const [model, processor] = await Promise.all([
+        AutoModel.from_pretrained("briaai/RMBG-1.4", {
+          dtype: "q8",
+          subfolder: "onnx",
+          progress_callback: updateDownloadProgress
+        }),
+        AutoProcessor.from_pretrained("briaai/RMBG-1.4", {
+          progress_callback: updateDownloadProgress
+        })
+      ]);
+      return {
+        model: model as unknown as BriaCutout["model"],
+        processor: processor as unknown as BriaCutout["processor"],
+        RawImage: RawImage as unknown as BriaCutout["RawImage"]
+      };
+    });
+  }
+
+  try {
+    return await briaCutoutPromise;
+  } catch (error) {
+    briaCutoutPromise = undefined;
+    throw error;
+  }
+};
+
+const canvasToPngBlob = async (canvas: HTMLCanvasElement | OffscreenCanvas) => {
+  if ("convertToBlob" in canvas) return canvas.convertToBlob({ type: "image/png" });
+  const blob = await new Promise<Blob | null>((resolve) => {
+    canvas.toBlob(resolve, "image/png");
+  });
+  if (!blob) throw new Error("Browser cutout could not export PNG.");
+  return blob;
+};
+
+const runBriaCutout = async (image: Blob, onProgress: (progress: CutoutProgress) => void) => {
+  const { model, processor, RawImage } = await loadBriaCutout(onProgress);
+  onProgress({ stage: "browserCompute", percent: 78 });
+
+  const rawImage = await RawImage.fromBlob(image);
+  const processed = await processor(rawImage);
+  onProgress({ stage: "browserCompute", percent: 84 });
+  const output = await model({ input: processed.pixel_values });
+  onProgress({ stage: "browserCompute", percent: 92 });
+
+  const mask = await RawImage.fromTensor(output.output[0].mul(255).to("uint8"));
+  const resizedMask = await mask.resize(rawImage.width, rawImage.height);
+  const canvas = rawImage.toCanvas();
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Browser cutout could not prepare the photo.");
+
+  const pixels = context.getImageData(0, 0, rawImage.width, rawImage.height);
+  for (let pixelIndex = 0, alphaIndex = 0; pixelIndex < pixels.data.length; pixelIndex += 4, alphaIndex += 1) {
+    pixels.data[pixelIndex + 3] = resizedMask.data[alphaIndex] ?? 0;
+  }
+  context.putImageData(pixels, 0, 0);
+  onProgress({ stage: "browserCompute", percent: 100 });
+  return canvasToPngBlob(canvas);
+};
+
+const removeBackgroundInBrowser = async (image: Blob, onProgress: (progress: CutoutProgress) => void) => {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await runBriaCutout(image, onProgress);
+    } catch (error) {
+      if (!isStaleCutoutCacheError(error)) throw error;
+      lastError = error;
+    }
+    briaCutoutPromise = undefined;
+    cutoutCacheReadyPromise = undefined;
+    await clearCutoutModelCache();
+    window.localStorage.removeItem("munchi-cutout-build");
+  }
+  throw lastError instanceof Error ? lastError : new Error("Background removal failed.");
+};
+
+const removeBackgroundOnLocalServer = async (image: Blob, onProgress: (progress: CutoutProgress) => void) => {
+  onProgress({ stage: "browserCompute", percent: 8 });
   const tokenResponse = await fetch("/api/csrf-token");
-  if (!tokenResponse.ok) throw new Error("Could not prepare a sticker request.");
+  if (!tokenResponse.ok) throw new Error("Could not prepare local BRIA cutout.");
   const { token } = (await tokenResponse.json()) as { token: string };
   const form = new FormData();
   form.append("image_file", image, image instanceof File ? image.name : "photo.jpg");
-  const response = await fetch("/api/remove-background", {
+  const response = await fetch("/api/bria-cutout", {
     method: "POST",
     headers: { "x-csrf-token": token },
     body: form
   });
   if (!response.ok) {
-    const payload = await response.json().catch(() => ({ error: "Background removal failed." }));
-    throw new Error(payload.error || "Background removal failed.");
+    const payload = await response.json().catch(() => ({ error: "Local BRIA cutout failed." }));
+    throw new Error(payload.error || "Local BRIA cutout failed.");
   }
+  onProgress({ stage: "browserCompute", percent: 100 });
   return response.blob();
+};
+
+const removeBackground = async (image: Blob, onProgress: (progress: CutoutProgress) => void) => {
+  try {
+    return await removeBackgroundInBrowser(image, onProgress);
+  } catch {
+    briaCutoutPromise = undefined;
+    cutoutCacheReadyPromise = undefined;
+    await clearCutoutModelCache().catch(() => {});
+    window.localStorage.removeItem("munchi-cutout-build");
+    return removeBackgroundOnLocalServer(image, onProgress);
+  }
 };
 
 const analyzeFood = async (image: Blob, language: Language) => {
@@ -1445,6 +1669,9 @@ function StickerPreview({
   const [stickerUrl, setStickerUrl] = useState("");
   const creating = pixelJobStatus === "generating";
   const error = draft.pixelError || "";
+  const prepProgress = draft.prepProgress;
+  const prepPercent = prepProgress?.percent ?? 1;
+  const prepLabel = prepProgress ? t.cutoutProgress[prepProgress.stage] : t.preparingHelp;
 
   useEffect(() => {
     if (!draft.originalBlob) return;
@@ -1496,6 +1723,12 @@ function StickerPreview({
               </div>
               <strong>{draft.prepError ? t.cutoutAttention : !draft.cutoutBlob ? t.preparing : creating ? t.creating : t.willAppear}</strong>
               <p>{draft.prepError ? t.cutoutHelp : !draft.cutoutBlob ? t.preparingHelp : t.creatingHelp}</p>
+              {!draft.cutoutBlob && !draft.prepError && (
+                <div className="cutout-progress">
+                  <progress aria-label={t.cutoutProgressLabel} value={prepPercent} max={100} />
+                  <em>{prepLabel} / {prepPercent}%</em>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -2505,21 +2738,24 @@ export default function App() {
 
     const file = draft.file;
     activePrepJob.current = file;
+    setDraft((current) => current.file === file ? { ...current, prepProgress: { stage: "browserDownload", percent: 1 } } : current);
 
     (async () => {
       const processingImage = await shrinkImageBlob(file).catch(() => file);
       const analysisPromise = analyzeFood(processingImage, language).catch(() => undefined);
       try {
-        const cutoutBlob = await removeBackground(processingImage);
+        const cutoutBlob = await removeBackground(processingImage, (prepProgress) => {
+          setDraft((current) => current.file === file ? { ...current, prepProgress } : current);
+        });
         if (activePrepJob.current === file) activePrepJob.current = null;
-        setDraft((current) => current.file === file ? { ...current, cutoutBlob, prepError: undefined, pixelError: undefined } : current);
+        setDraft((current) => current.file === file ? { ...current, cutoutBlob, prepProgress: undefined, prepError: undefined, pixelError: undefined } : current);
         showToast(copy[language].add.cutoutReady);
         const analysis = await analysisPromise;
         if (analysis) setDraft((current) => current.file === file ? { ...current, analysis } : current);
       } catch (caught) {
         if (activePrepJob.current === file) activePrepJob.current = null;
-        const message = caught instanceof Error ? caught.message : "Background removal failed.";
-        setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
+        const message = cutoutErrorMessage(caught, language);
+        setDraft((current) => current.file === file ? { ...current, prepProgress: undefined, prepError: message } : current);
       }
     })();
   }, [draft.file, draft.originalBlob, draft.cutoutBlob, draft.prepError, language]);

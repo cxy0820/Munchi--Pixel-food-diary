@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import express from "express";
 import multer from "multer";
+import sharp from "sharp";
 
 dotenv.config();
 
@@ -96,6 +97,64 @@ const removeBackgroundWithRembg = async (file) => {
   }
 };
 
+let briaServerCutoutPromise;
+
+const loadBriaServerCutout = async () => {
+  if (!briaServerCutoutPromise) {
+    briaServerCutoutPromise = import("@huggingface/transformers").then(async ({ AutoModel, AutoProcessor, RawImage, env }) => {
+      env.allowLocalModels = false;
+      env.allowRemoteModels = true;
+      env.cacheDir = path.join(projectRoot, "models", "bria-rmbg");
+      const onnxWasm = env.backends?.onnx?.wasm;
+      if (onnxWasm) {
+        onnxWasm.numThreads = 1;
+        onnxWasm.proxy = false;
+      }
+      const [model, processor] = await Promise.all([
+        AutoModel.from_pretrained("briaai/RMBG-1.4", { dtype: "q8", subfolder: "onnx" }),
+        AutoProcessor.from_pretrained("briaai/RMBG-1.4")
+      ]);
+      return { model, processor, RawImage };
+    }).catch((error) => {
+      briaServerCutoutPromise = undefined;
+      throw error;
+    });
+  }
+  return briaServerCutoutPromise;
+};
+
+const removeBackgroundWithBria = async (file) => {
+  const { model, processor, RawImage } = await loadBriaServerCutout();
+  const rawImage = await RawImage.fromBlob(new Blob([file.buffer], { type: file.mimetype }));
+  const pixelCount = rawImage.width * rawImage.height;
+  if (pixelCount > 9_000_000) {
+    const error = new Error("Image is too large for local BRIA cutout.");
+    error.code = "IMAGE_TOO_LARGE";
+    throw error;
+  }
+
+  const processed = await processor(rawImage);
+  const output = await model({ input: processed.pixel_values });
+  const mask = await RawImage.fromTensor(output.output[0].mul(255).to("uint8"));
+  const resizedMask = await mask.resize(rawImage.width, rawImage.height);
+  const source = rawImage.data;
+  const channels = rawImage.channels || 4;
+  const rgba = Buffer.alloc(pixelCount * 4);
+
+  for (let pixelIndex = 0, alphaIndex = 0; pixelIndex < rgba.length; pixelIndex += 4, alphaIndex += 1) {
+    const sourceIndex = alphaIndex * channels;
+    const red = source[sourceIndex] ?? 0;
+    rgba[pixelIndex] = red;
+    rgba[pixelIndex + 1] = channels > 1 ? source[sourceIndex + 1] ?? red : red;
+    rgba[pixelIndex + 2] = channels > 2 ? source[sourceIndex + 2] ?? red : red;
+    rgba[pixelIndex + 3] = Math.round(((channels > 3 ? source[sourceIndex + 3] ?? 255 : 255) * (resizedMask.data[alphaIndex] ?? 0)) / 255);
+  }
+
+  return sharp(rgba, {
+    raw: { width: rawImage.width, height: rawImage.height, channels: 4 }
+  }).png().toBuffer();
+};
+
 const securityHeaders = (_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "SAMEORIGIN");
@@ -103,7 +162,7 @@ const securityHeaders = (_req, res, next) => {
   res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; img-src 'self' blob: data:; connect-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    "default-src 'self'; img-src 'self' blob: data:; connect-src 'self' https://huggingface.co https://*.huggingface.co https://*.hf.co; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self' blob: 'wasm-unsafe-eval'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
   );
   if (_req.secure) {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
@@ -136,6 +195,41 @@ app.get("/api/csrf-token", (_req, res) => {
   res.json({ token: csrfToken });
 });
 
+app.post("/api/bria-cutout", limiter, upload.single("image_file"), async (req, res) => {
+  if (req.headers["x-csrf-token"] !== csrfToken) {
+    res.status(403).json({ error: "The sticker request could not be verified. Refresh and try again." });
+    return;
+  }
+
+  if (process.env.RENDER && process.env.ENABLE_HOSTED_BRIA_CUTOUT !== "true") {
+    res.status(503).json({ error: "Hosted BRIA cutout is disabled to keep the server stable." });
+    return;
+  }
+
+  if (!req.file) {
+    res.status(400).json({ error: "Upload a photo before creating a sticker." });
+    return;
+  }
+
+  if (!["image/png", "image/jpeg", "image/webp", "image/heic", "image/heif"].includes(req.file.mimetype) || !isImageBuffer(req.file.buffer)) {
+    res.status(400).json({ error: "Upload a PNG, JPG, WebP, or HEIC image." });
+    return;
+  }
+
+  try {
+    const result = await removeBackgroundWithBria(req.file);
+    res.setHeader("Content-Type", "image/png");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(result);
+  } catch (error) {
+    if (error?.code === "IMAGE_TOO_LARGE") {
+      res.status(413).json({ error: "This photo is too large for local BRIA cutout. Try a smaller image." });
+      return;
+    }
+    res.status(502).json({ error: "Local BRIA cutout could not remove the background. Refresh and try another clear photo." });
+  }
+});
+
 app.post("/api/remove-background", limiter, upload.single("image_file"), async (req, res) => {
   if (req.headers["x-csrf-token"] !== csrfToken) {
     res.status(403).json({ error: "The sticker request could not be verified. Refresh and try again." });
@@ -152,6 +246,11 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
     return;
   }
 
+  if (process.env.ENABLE_SERVER_BACKGROUND_REMOVAL !== "true") {
+    res.status(503).json({ error: "Server background removal is paused while browser cutout is enabled." });
+    return;
+  }
+
   let provider = (process.env.BACKGROUND_PROVIDER || "removebg").toLowerCase();
   if (provider === "rembg" && (process.env.ALLOW_LOCAL_REMBG !== "true" || process.env.RENDER)) {
     if (!process.env.REMOVE_BG_API_KEY) {
@@ -162,6 +261,11 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
   }
 
   if (provider === "removebg") {
+    if (process.env.ENABLE_REMOVE_BG_PROVIDER !== "true") {
+      res.status(503).json({ error: "remove.bg backup is paused while BRIA cutout is enabled." });
+      return;
+    }
+
     if (!process.env.REMOVE_BG_API_KEY) {
       res.status(503).json({ error: "remove.bg is not configured. Add REMOVE_BG_API_KEY to .env and restart the server." });
       return;
@@ -420,8 +524,21 @@ app.post("/api/pixel-sticker", limiter, upload.single("image_file"), async (req,
   }
 });
 
-app.use(express.static(dist, { index: false }));
+app.use(express.static(dist, {
+  index: false,
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(".html")) res.setHeader("Cache-Control", "no-store");
+  }
+}));
+app.use((req, res, next) => {
+  if (req.path.startsWith("/assets/") || req.path.startsWith("/models/")) {
+    res.status(404).type("text/plain").send("Not found");
+    return;
+  }
+  next();
+});
 app.use((_req, res, next) => {
+  res.setHeader("Cache-Control", "no-store");
   res.sendFile(path.join(dist, "index.html"), (error) => {
     if (error) next();
   });
