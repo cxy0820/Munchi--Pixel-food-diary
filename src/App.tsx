@@ -1385,7 +1385,7 @@ function Today({ language, records, urls }: { language: Language; records: FoodR
   );
 }
 
-function AddCapture({ language, draft, setDraft, toast }: { language: Language; draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>>; toast: (message: string) => void }) {
+function AddCapture({ language, draft, setDraft }: { language: Language; draft: Draft; setDraft: React.Dispatch<React.SetStateAction<Draft>> }) {
   const t = copy[language].add;
   const navigate = useNavigate();
   const [preview, setPreview] = useState("");
@@ -1401,19 +1401,8 @@ function AddCapture({ language, draft, setDraft, toast }: { language: Language; 
     const file = event.target.files?.[0];
     if (!file) return;
     setDraft({ ...initialDraft, source, file, originalBlob: file });
+    event.target.value = "";
     navigate("/app/add/preview");
-    const processingImage = await shrinkImageBlob(file).catch(() => file);
-    const analysisPromise = analyzeFood(processingImage, language).catch(() => undefined);
-    try {
-      const cutoutBlob = await removeBackground(processingImage);
-      setDraft((current) => current.file === file ? { ...current, cutoutBlob, prepError: undefined, pixelError: undefined } : current);
-      toast(t.cutoutReady);
-      const analysis = await analysisPromise;
-      if (analysis) setDraft((current) => current.file === file ? { ...current, analysis } : current);
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : "Background removal failed.";
-      setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
-    }
   };
 
   return (
@@ -2471,6 +2460,7 @@ export default function App() {
   const [pixelRetryNonce, setPixelRetryNonce] = useState(0);
   const [stickerReadySeen, setStickerReadySeen] = useState(false);
   const [toast, setToast] = useState("");
+  const activePrepJob = useRef<File | null>(null);
   const activePixelJob = useRef<Blob | null>(null);
   const urls = useAssetUrls(assets);
   const language = settings.language || "en";
@@ -2505,6 +2495,34 @@ export default function App() {
   useEffect(() => {
     document.documentElement.lang = language === "zh" ? "zh-CN" : "en";
   }, [language]);
+
+  useEffect(() => {
+    if (!draft.file || !draft.originalBlob || draft.cutoutBlob || draft.prepError) {
+      activePrepJob.current = null;
+      return;
+    }
+    if (activePrepJob.current === draft.file) return;
+
+    const file = draft.file;
+    activePrepJob.current = file;
+
+    (async () => {
+      const processingImage = await shrinkImageBlob(file).catch(() => file);
+      const analysisPromise = analyzeFood(processingImage, language).catch(() => undefined);
+      try {
+        const cutoutBlob = await removeBackground(processingImage);
+        if (activePrepJob.current === file) activePrepJob.current = null;
+        setDraft((current) => current.file === file ? { ...current, cutoutBlob, prepError: undefined, pixelError: undefined } : current);
+        showToast(copy[language].add.cutoutReady);
+        const analysis = await analysisPromise;
+        if (analysis) setDraft((current) => current.file === file ? { ...current, analysis } : current);
+      } catch (caught) {
+        if (activePrepJob.current === file) activePrepJob.current = null;
+        const message = caught instanceof Error ? caught.message : "Background removal failed.";
+        setDraft((current) => current.file === file ? { ...current, prepError: message } : current);
+      }
+    })();
+  }, [draft.file, draft.originalBlob, draft.cutoutBlob, draft.prepError, language]);
 
   useEffect(() => {
     if (!draft.cutoutBlob) {
@@ -2590,7 +2608,7 @@ export default function App() {
         <Route path="/" element={<Landing language={language} setLanguage={setLanguage} />} />
         <Route path="/app" element={shell(<Navigate to="/app/today" replace />)} />
         <Route path="/app/today" element={shell(<Today language={language} records={routeBundle.records} urls={routeBundle.urls} collages={routeBundle.collages} />)} />
-        <Route path="/app/add" element={shell(<AddCapture language={language} draft={draft} setDraft={setDraft} toast={showToast} />)} />
+        <Route path="/app/add" element={shell(<AddCapture language={language} draft={draft} setDraft={setDraft} />)} />
         <Route path="/app/add/preview" element={shell(<StickerPreview language={language} draft={draft} pixelJobStatus={pixelJobStatus} retryPixelSticker={retryPixelSticker} />)} />
         <Route path="/app/add/details" element={shell(<RecordDetails language={language} draft={draft} settings={settings} onSave={saveRecord} />)} />
         <Route path="/app/add/saved" element={shell(<Saved language={language} />)} />

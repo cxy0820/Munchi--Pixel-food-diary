@@ -54,7 +54,7 @@ const removeBackgroundWithRembg = async (file) => {
     path.join(projectRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
   const scriptPath = path.join(projectRoot, "scripts", "rembg_remove.py");
   const modelHome = process.env.U2NET_HOME || path.join(projectRoot, "models", "rembg");
-  const model = process.env.REMBG_MODEL || "u2net";
+  const model = process.env.REMBG_MODEL || "u2netp";
   const timeout = Number(process.env.REMBG_TIMEOUT_MS || 300_000);
 
   try {

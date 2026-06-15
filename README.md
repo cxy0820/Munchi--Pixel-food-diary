@@ -18,7 +18,7 @@ The landing page lives at `/`. The working app lives under `/app/today`.
 
    ```bash
    BACKGROUND_PROVIDER=rembg
-   REMBG_MODEL=u2net
+   REMBG_MODEL=u2netp
    REMBG_TIMEOUT_MS=300000
    CLIPDROP_API_KEY=your_clipdrop_api_key_here
    OPENAI_API_KEY=your_openai_api_key_here
