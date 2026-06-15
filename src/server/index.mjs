@@ -201,8 +201,8 @@ app.post("/api/bria-cutout", limiter, upload.single("image_file"), async (req, r
     return;
   }
 
-  if (process.env.RENDER && process.env.ENABLE_HOSTED_BRIA_CUTOUT !== "true") {
-    res.status(503).json({ error: "Hosted BRIA cutout is disabled to keep the server stable." });
+  if (process.env.DISABLE_HOSTED_BRIA_CUTOUT === "true") {
+    res.status(503).json({ error: "BRIA cutout is paused on this server." });
     return;
   }
 
