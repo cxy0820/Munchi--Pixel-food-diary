@@ -142,9 +142,49 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
     return;
   }
 
-  const provider = (process.env.BACKGROUND_PROVIDER || "rembg").toLowerCase();
+  const provider = (process.env.BACKGROUND_PROVIDER || (process.env.REMOVE_BG_API_KEY ? "removebg" : "rembg")).toLowerCase();
 
-  if (provider === "rembg" || provider === "removebg") {
+  if (provider === "removebg") {
+    if (!process.env.REMOVE_BG_API_KEY) {
+      res.status(503).json({ error: "remove.bg is not configured. Add REMOVE_BG_API_KEY to .env and restart the server." });
+      return;
+    }
+
+    const form = new FormData();
+    form.append("image_file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "photo.jpg");
+    form.append("size", "auto");
+    form.append("format", "png");
+
+    try {
+      const response = await fetch("https://api.remove.bg/v1.0/removebg", {
+        method: "POST",
+        headers: { "X-Api-Key": process.env.REMOVE_BG_API_KEY },
+        body: form
+      });
+
+      if (!response.ok) {
+        const fallback = {
+          400: "remove.bg could not read this image. Try a PNG, JPG, WebP, or HEIC photo.",
+          402: "remove.bg has no credits left for this account.",
+          403: "remove.bg rejected the API key. Check REMOVE_BG_API_KEY.",
+          429: "remove.bg is rate limiting requests. Please try again soon."
+        };
+        const text = await response.text().catch(() => "");
+        res.status(response.status).json({ error: fallback[response.status] || text || "remove.bg could not remove the background." });
+        return;
+      }
+
+      const result = Buffer.from(await response.arrayBuffer());
+      res.setHeader("Content-Type", "image/png");
+      res.setHeader("Cache-Control", "no-store");
+      res.send(result);
+    } catch {
+      res.status(502).json({ error: "Could not reach remove.bg. Check your network and try again." });
+    }
+    return;
+  }
+
+  if (provider === "rembg") {
     try {
       const result = await removeBackgroundWithRembg(req.file);
       res.setHeader("Content-Type", "image/png");
@@ -168,7 +208,7 @@ app.post("/api/remove-background", limiter, upload.single("image_file"), async (
   form.append("image_file", new Blob([req.file.buffer], { type: req.file.mimetype }), req.file.originalname || "photo.jpg");
 
   if (provider !== "clipdrop") {
-    res.status(503).json({ error: "Unknown background removal provider. Use BACKGROUND_PROVIDER=rembg or BACKGROUND_PROVIDER=clipdrop." });
+    res.status(503).json({ error: "Unknown background removal provider. Use BACKGROUND_PROVIDER=removebg, rembg, or clipdrop." });
     return;
   }
 

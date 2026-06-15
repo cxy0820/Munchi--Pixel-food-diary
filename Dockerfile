@@ -19,7 +19,7 @@ RUN python3 -m venv .venv \
   && .venv/bin/python -m pip install --no-cache-dir --upgrade pip \
   && .venv/bin/python -m pip install --no-cache-dir -r requirements-rembg.txt
 
-ENV BACKGROUND_PROVIDER=rembg \
+ENV BACKGROUND_PROVIDER=removebg \
     REMBG_PYTHON=/app/.venv/bin/python \
     U2NET_HOME=/app/models/rembg \
     REMBG_MODEL=u2netp \
